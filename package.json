@@ -1,26 +1,26 @@
 {
   "name": "cryptoai",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+  "packageManager": "pnpm@10.29.2",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
   },
-  "dependencies": {
-    "next": "16.2.10",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+  "scripts": {
+    "dev": "pnpm -r --filter @cryptoai/contracts --filter @cryptoai/config --if-present build && pnpm -r --parallel --filter \"./apps/*\" dev",
+    "build": "pnpm -r --filter \"./packages/*\" --if-present build && pnpm -r --filter \"./apps/*\" --if-present build",
+    "lint": "pnpm -r --if-present lint",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "pnpm --filter @cryptoai/database db:generate",
+    "db:migrate": "pnpm --filter @cryptoai/database db:migrate",
+    "db:seed": "pnpm --filter @cryptoai/database db:seed"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.10",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "prettier": "^3.6.2",
+    "typescript": "^5.8.3"
   }
 }

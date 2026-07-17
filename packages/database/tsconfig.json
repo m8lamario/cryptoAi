@@ -1,0 +1,9 @@
+{
+  "extends": "@cryptoai/typescript-config/base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "paths": {}
+  },
+  "include": ["src", "prisma"]
+}

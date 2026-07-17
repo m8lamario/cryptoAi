@@ -1,36 +1,126 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Crypto Agent
 
-## Getting Started
+Private operational console for the AI crypto investment system.
+This is a self-hosted, single-user application intended for localhost or trusted LAN/VPN access only.
 
-First, run the development server:
+## Prerequisites
+
+- Node.js >= 20
+- pnpm >= 10 (`npm install -g pnpm`)
+- Docker + Docker Compose (for PostgreSQL and Redis)
+
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Install dependencies
+pnpm install
+
+# Copy environment variables
+cp .env.example .env
+# Edit .env with your values (see Auth Setup below)
+
+# Start infrastructure
+docker compose up -d
+
+# Generate Prisma client
+pnpm db:generate
+
+# Run initial migration
+pnpm db:migrate
+
+# Seed the database and set the owner password (first run)
+OWNER_PASSWORD=<your-strong-password> pnpm db:seed
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Auth Setup (Phase 0B)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+This application uses a single owner account. **There is no public registration.**
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Setting the owner password
 
-## Learn More
+The owner password is hashed with scrypt and stored in PostgreSQL. The plaintext
+password is never written to disk or logged. Set it via an environment variable
+on the first seed run:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+OWNER_PASSWORD=my-strong-passphrase pnpm db:seed
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+After the hash is stored you may unset `OWNER_PASSWORD`. Re-running `db:seed`
+without `OWNER_PASSWORD` is safe — it preserves the existing hash.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+> **Never put the actual password in `.env.example`, source code, or logs.**
 
-## Deploy on Vercel
+### Cookie behavior
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- The session cookie is `HttpOnly`, `SameSite=Lax`, `Path=/`.
+- `Secure` is controlled by `SESSION_COOKIE_SECURE` in `.env`.
+  - Set to `false` for local HTTP development.
+  - Set to `true` when serving over HTTPS (LAN/VPN with TLS termination).
+- The session token is a random 32-byte value. Only its SHA-256 hash is stored in the database.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Session expiry and logout
+
+- Sessions expire after `SESSION_TTL_SECONDS` seconds (default 24 h).
+- Visit the dashboard and click **Sign out**, or POST `/api/auth/logout`.
+- Logging out immediately revokes the session in the database.
+
+### Access restrictions
+
+- The dashboard (`apps/web`, port 3000) requires an active session.
+- The Express API (`apps/api`, port 4000) protects `/private/*` with the same session cookie.
+- `GET /health` and `GET /ready` are public on the API.
+- `GET /api/health` is public on the Next.js app.
+
+### Network security
+
+- Do **not** expose PostgreSQL, Redis, the internal API port, or admin ports to the public internet.
+- Restrict dashboard access to `localhost`, a trusted private LAN, or a VPN.
+
+## Development
+
+```bash
+# Start all apps in development mode
+pnpm dev
+
+# Or start individually
+pnpm --filter @cryptoai/web dev
+pnpm --filter @cryptoai/api dev
+pnpm --filter @cryptoai/worker dev
+```
+
+## Available Scripts
+
+| Command             | Description                                         |
+| ------------------- | --------------------------------------------------- |
+| `pnpm dev`          | Start all apps in development mode                  |
+| `pnpm build`        | Build all packages and apps                         |
+| `pnpm lint`         | Run ESLint across the monorepo                      |
+| `pnpm typecheck`    | Run TypeScript checks across the monorepo           |
+| `pnpm test`         | Run all tests                                       |
+| `pnpm format`       | Format code with Prettier                           |
+| `pnpm format:check` | Check formatting                                    |
+| `pnpm db:generate`  | Generate Prisma client                              |
+| `pnpm db:migrate`   | Run database migrations                             |
+| `pnpm db:seed`      | Seed the database (set OWNER_PASSWORD on first run) |
+
+## Architecture
+
+- **apps/web** – Private Next.js operational dashboard (port 3000)
+- **apps/api** – Internal Express API (port 4000)
+- **apps/worker** – Background BullMQ worker
+- **packages/contracts** – Shared TypeScript contracts
+- **packages/config** – Environment variable validation
+- **packages/database** – Prisma client, schema and password utilities
+- **packages/typescript-config** – Shared TypeScript configuration
+
+## Security
+
+- No public registration — single owner account only
+- Password hashed with scrypt (Node built-in crypto)
+- Session token stored only as SHA-256 hash in PostgreSQL
+- All secrets remain server-side
+- Dashboard accessible only via localhost, LAN, or VPN
+- PostgreSQL and Redis bound to localhost (127.0.0.1) in development
+- CSRF protection via strict Origin check on state-changing auth routes
+- Login rate limiting (in-memory, per-IP fixed window)
