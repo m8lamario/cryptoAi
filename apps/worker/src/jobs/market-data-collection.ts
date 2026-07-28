@@ -22,6 +22,7 @@ export interface MarketDataCollectionJobResult {
 export async function collectMarketData(
   job: Job<MarketDataCollectionJobData, MarketDataCollectionJobResult>,
 ): Promise<MarketDataCollectionJobResult> {
+  void job;
   const provider: MarketDataProvider = new BinanceProvider();
   const symbols = SUPPORTED_ASSETS.map((a) => a.symbol);
 

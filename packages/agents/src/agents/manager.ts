@@ -2,7 +2,7 @@ import { z } from "zod";
 import { BaseAgent } from "../base-agent.js";
 import type { BaseAgentConfig, AgentRunContext } from "../base-agent.js";
 import type { AgentReport, TradeSignal } from "../agent-report.js";
-import { unavailableReport } from "../agent-report.js";
+import { unavailableReport, invalidReport } from "../agent-report.js";
 import type {
   TradeProposal,
 } from "@cryptoai/risk-engine";
@@ -10,6 +10,11 @@ import type {
 export interface ManagerAgentInput {
   symbol: string;
   reports: AgentReport[];
+}
+
+export interface ManagerRunResult {
+  report: AgentReport;
+  proposal: TradeProposal;
 }
 
 const ManagerOutputSchema = z.object({
@@ -132,12 +137,22 @@ export class ManagerAgent extends BaseAgent {
   }
 
   async run(context: AgentRunContext & { input: ManagerAgentInput }): Promise<AgentReport> {
+    const result = await this.runProposal(context);
+    return result.report;
+  }
+
+  /**
+   * Run the manager and return both its auditable AgentReport and its
+   * deterministic-boundary TradeProposal. The proposal never contains an
+   * executable order or an amount decided by the model.
+   */
+  async runProposal(context: AgentRunContext & { input: ManagerAgentInput }): Promise<ManagerRunResult> {
     const { symbol, reports } = context.input;
     const validReports = reports.filter((r) => r.status === "VALID");
 
     // Quorum check: not enough valid reports
     if (validReports.length < this.minValidReports) {
-      return unavailableReport(
+      const report = unavailableReport(
         this.agentId,
         this.agentVersion,
         this.promptVersion,
@@ -145,68 +160,90 @@ export class ManagerAgent extends BaseAgent {
         symbol,
         `Insufficient valid reports: ${validReports.length}/${reports.length} (minimum ${this.minValidReports})`,
       );
+      return { report, proposal: unavailableProposal(symbol, report.reasoning[0] ?? "Insufficient valid reports") };
     }
 
     try {
       const userPrompt = buildUserPrompt(context.input);
 
-      const baseReport = await this.callGateway(
-        context.gateway,
+      const response = await context.gateway.structuredCall(
         SYSTEM_PROMPT,
         userPrompt,
         ManagerOutputSchema,
-        context,
+        this.callOptions,
+        this.promptVersion,
+        "1.0.0",
       );
 
-      if (baseReport.status !== "VALID") {
-        return baseReport;
+      if (response.status === "UNAVAILABLE") {
+        const report = unavailableReport(
+          this.agentId,
+          this.agentVersion,
+          this.promptVersion,
+          this.model,
+          symbol,
+          response.error?.message ?? "AI Gateway unavailable",
+        );
+        return { report, proposal: unavailableProposal(symbol, report.reasoning[0] ?? "AI Gateway unavailable") };
       }
 
-      // Deterministic ambiguity detection (pre-check)
+      if (response.status === "INVALID" || response.data === null) {
+        const report = invalidReport(
+          this.agentId,
+          this.agentVersion,
+          this.promptVersion,
+          this.model,
+          symbol,
+          response.error?.message ?? "Invalid manager output",
+        );
+        return { report, proposal: { ...unavailableProposal(symbol, report.reasoning[0] ?? "Invalid manager output"), status: "INVALID" } };
+      }
+
+      const output = response.data;
       const determAmbiguity = this.detectAmbiguity(validReports);
+      const isAmbiguous = determAmbiguity.isAmbiguous || output.isAmbiguous;
+      const reportIds = validReports.map((r) => r.runId);
+      const averageDataQuality = validReports.reduce((sum, r) => sum + r.dataQuality, 0) / validReports.length;
+      const report: AgentReport = {
+        status: "VALID",
+        runId: response.runId,
+        agentId: this.agentId,
+        agentVersion: this.agentVersion,
+        promptVersion: this.promptVersion,
+        requestedModel: response.requestedModel,
+        actualModel: response.actualModel,
+        asset: symbol,
+        horizon: "MEDIUM",
+        signal: isAmbiguous ? null : output.action,
+        score: output.action === "BUY" ? output.confidence : output.action === "SELL" ? -output.confidence : 0,
+        confidence: output.confidence,
+        dataQuality: averageDataQuality,
+        reasoning: isAmbiguous
+          ? [`AMBIGUOUS: ${determAmbiguity.reason || output.ambiguityReason || "Manager flagged significant disagreement"}`, ...output.rationale]
+          : output.rationale,
+        supportingEvidence: validReports.flatMap((r) => r.supportingEvidence).slice(0, 20),
+        opposingEvidence: validReports.flatMap((r) => r.opposingEvidence).slice(0, 20),
+        sourceIds: reportIds,
+        generatedAt: response.generatedAt,
+        usage: response.usage ?? { promptTokens: 0, completionTokens: 0, latencyMs: 0, estimatedCostUsd: 0 },
+      };
 
       // Build the TradeProposal
       const proposal: TradeProposal = {
-        status: "VALID",
+        status: isAmbiguous ? "AMBIGUOUS" : output.action === null || output.action === "HOLD" || output.action === "WAIT" ? "NO_ACTION" : "VALID",
         asset: symbol,
-        action: baseReport.signal,
-        confidence: baseReport.confidence,
-        rationale: baseReport.reasoning,
-        reportIds: validReports.map((r) => r.runId),
-        suggestedRiskFraction: baseReport.signal === "BUY" || baseReport.signal === "SELL"
-          ? (baseReport as unknown as { suggestedRiskFraction?: number | null }).suggestedRiskFraction ?? baseReport.confidence * 0.05
-          : null,
-        invalidationConditions: (baseReport as unknown as { invalidationConditions?: string[] }).invalidationConditions ?? [],
+        action: isAmbiguous ? null : output.action,
+        confidence: output.confidence,
+        rationale: isAmbiguous && output.ambiguityReason ? [output.ambiguityReason, ...output.rationale] : output.rationale,
+        reportIds,
+        suggestedRiskFraction: !isAmbiguous && (output.action === "BUY" || output.action === "SELL") ? output.suggestedRiskFraction : null,
+        invalidationConditions: output.invalidationConditions,
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
       };
 
-      // If managerial ambiguity detected OR AI flagged ambiguity, override status
-      if (determAmbiguity.isAmbiguous) {
-        proposal.status = "AMBIGUOUS";
-        proposal.action = null;
-        proposal.suggestedRiskFraction = null;
-
-        return {
-          ...baseReport,
-          status: "VALID", // Manager report itself is VALID; the proposal carries AMBIGUOUS
-          signal: null,
-          reasoning: [
-            `AMBIGUOUS: ${determAmbiguity.reason}`,
-            ...baseReport.reasoning,
-          ],
-        };
-      }
-
-      // If no clear action, set NO_ACTION
-      if (proposal.action === null || proposal.action === "HOLD" || proposal.action === "WAIT") {
-        proposal.status = "NO_ACTION";
-        proposal.suggestedRiskFraction = null;
-      }
-
-      // Return the AgentReport enriched with proposal data
-      return baseReport;
+      return { report, proposal };
     } catch (err) {
-      return unavailableReport(
+      const report = unavailableReport(
         this.agentId,
         this.agentVersion,
         this.promptVersion,
@@ -214,6 +251,7 @@ export class ManagerAgent extends BaseAgent {
         symbol,
         err instanceof Error ? err.message : "Manager agent failed",
       );
+      return { report, proposal: unavailableProposal(symbol, report.reasoning[0] ?? "Manager agent failed") };
     }
   }
 
@@ -271,5 +309,19 @@ export class ManagerAgent extends BaseAgent {
 
     return { isAmbiguous: false, reason: "" };
   }
+}
+
+function unavailableProposal(asset: string, reason: string): TradeProposal {
+  return {
+    status: "UNAVAILABLE",
+    asset,
+    action: null,
+    confidence: 0,
+    rationale: [reason],
+    reportIds: [],
+    suggestedRiskFraction: null,
+    invalidationConditions: [],
+    expiresAt: null,
+  };
 }
 

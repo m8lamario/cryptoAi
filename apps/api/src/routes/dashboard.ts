@@ -22,6 +22,9 @@ export function createDashboardRouter(): Router {
         killSwitch,
         riskProfile,
         systemEvents,
+        paperBalance,
+        paperPositions,
+        latestBacktestRuns,
       ] = await Promise.all([
         prisma.asset.findMany({ where: { active: true }, select: { id: true, symbol: true } }),
         getLatestSnapshots(),
@@ -32,7 +35,24 @@ export function createDashboardRouter(): Router {
         prisma.killSwitch.findFirst({ orderBy: { updatedAt: "desc" } }),
         prisma.riskProfile.findFirst(),
         prisma.systemEvent.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
+        prisma.paperBalance.findFirst(),
+        prisma.paperPosition.findMany({ where: { status: "OPEN" }, orderBy: { openedAt: "asc" } }),
+        prisma.backtestRun.findMany({ orderBy: { createdAt: "desc" }, take: 3 }),
       ]);
+
+      const paperPositionsResponse = paperPositions.map((position) => ({
+        asset: position.asset,
+        side: position.side,
+        quantity: Number(position.quantity),
+        entryPrice: Number(position.entryPrice),
+        currentPrice: Number(position.currentPrice),
+        unrealizedPnl: Number(position.unrealizedPnl),
+        stopLoss: position.stopLoss === null ? null : Number(position.stopLoss),
+      }));
+      const paperExposure = paperPositionsResponse.reduce(
+        (sum, position) => sum + position.quantity * position.currentPrice,
+        0,
+      );
 
       // Compute AI cost totals
       const [reportAgg, proposalAgg, reportCount, proposalCount] = await Promise.all([
@@ -146,6 +166,30 @@ export function createDashboardRouter(): Router {
           type: e.type,
           message: e.message,
           createdAt: e.createdAt.toISOString(),
+        })),
+        paperPortfolio: {
+          balance: Number(paperBalance?.quote ?? 0),
+          peakValue: Number(paperBalance?.peakValue ?? 0),
+          dailyPnl: Number(paperBalance?.dailyPnl ?? 0),
+          totalExposure: paperExposure,
+          totalValue: Number(paperBalance?.quote ?? 0) + paperExposure,
+          positions: paperPositionsResponse,
+        },
+        backtestRuns: latestBacktestRuns.map((run) => ({
+          id: run.id,
+          strategy: run.strategy,
+          asset: run.asset,
+          startDate: run.startDate.toISOString(),
+          endDate: run.endDate.toISOString(),
+          initialQuote: Number(run.initialQuote),
+          finalQuote: Number(run.finalQuote),
+          totalReturn: Number(run.totalReturn),
+          maxDrawdown: Number(run.maxDrawdown),
+          sharpeRatio: run.sharpeRatio === null ? null : Number(run.sharpeRatio),
+          sortinoRatio: run.sortinoRatio === null ? null : Number(run.sortinoRatio),
+          totalTrades: run.totalTrades,
+          aiCostUsd: Number(run.aiCostUsd),
+          createdAt: run.createdAt.toISOString(),
         })),
       });
     } catch (err) {

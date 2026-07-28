@@ -67,8 +67,8 @@ without `OWNER_PASSWORD` is safe — it preserves the existing hash.
 
 ### Access restrictions
 
-- The dashboard (`apps/web`, port 3000) requires an active session.
-- The Express API (`apps/api`, port 4000) protects `/private/*` with the same session cookie.
+- The dashboard (`apps/web`, port 3001) requires an active session.
+- The Express API (`apps/api`, port 4000) protects `/private/*`, `/market-data/*`, `/analytics/*` and `/dashboard/*` with the same session cookie.
 - `GET /health` and `GET /ready` are public on the API.
 - `GET /api/health` is public on the Next.js app.
 
@@ -106,7 +106,7 @@ pnpm --filter @cryptoai/worker dev
 
 ## Architecture
 
-- **apps/web** – Private Next.js operational dashboard (port 3000)
+- **apps/web** – Private Next.js operational dashboard (port 3001)
 - **apps/api** – Internal Express API (port 4000)
 - **apps/worker** – Background BullMQ worker
 - **packages/contracts** – Shared TypeScript contracts

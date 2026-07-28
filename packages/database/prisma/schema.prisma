@@ -267,7 +267,6 @@ model PaperPosition {
 
   @@index([asset])
   @@index([status])
-  @@unique([asset, status])
 }
 
 model BacktestRun {

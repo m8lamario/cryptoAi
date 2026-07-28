@@ -41,7 +41,9 @@ export function computePositionSize(input: PositionSizingInput): PositionSizingR
   }
 
   return {
-    positionSize: Math.round(positionSize * 1e8) / 1e8, // round to 8 decimals
+    // Never round a capped position upward: that could exceed the configured
+    // exposure limit by a few satoshis.
+    positionSize: Math.floor(positionSize * 1e8) / 1e8,
     stopLoss: stopLoss !== null ? Math.round(stopLoss * 1e8) / 1e8 : null,
     riskAmount: Math.round(riskAmount * 100) / 100,
   };

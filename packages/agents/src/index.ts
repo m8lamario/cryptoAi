@@ -36,4 +36,4 @@ export type { WhaleAgentInput } from "./agents/whale.js";
 
 // Investment Manager (Phase 4)
 export { ManagerAgent } from "./agents/manager.js";
-export type { ManagerAgentInput } from "./agents/manager.js";
+export type { ManagerAgentInput, ManagerRunResult } from "./agents/manager.js";

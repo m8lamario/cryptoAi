@@ -42,9 +42,10 @@ export function createApp(deps: AppDeps = {}): Express {
 
   app.use("/auth", createAuthRouter(authStore, rateLimiter, authConfig));
   app.use("/private", requireAuth(authStore), privateRouter);
-  app.use("/market-data", createMarketDataRouter());
-  app.use("/analytics", createAnalyticsRouter());
-  app.use("/dashboard", createDashboardRouter());
+  const authenticated = requireAuth(authStore);
+  app.use("/market-data", authenticated, createMarketDataRouter());
+  app.use("/analytics", authenticated, createAnalyticsRouter());
+  app.use("/dashboard", authenticated, createDashboardRouter());
 
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: "Not found" });

@@ -20,6 +20,11 @@ interface DashboardData {
   riskConfig: { maxPortfolioExposurePercent: number; maxAssetExposurePercent: number; maxDailyLossPercent: number; maxDrawdownPercent: number } | null;
   aiCosts: { totalCostUsd: number; totalPromptTokens: number; totalCompletionTokens: number; avgLatencyMs: number };
   auditLog: Array<{ id: string; level: string; type: string; message: string; createdAt: string }>;
+  paperPortfolio: {
+    balance: number; peakValue: number; dailyPnl: number; totalExposure: number; totalValue: number;
+    positions: Array<{ asset: string; side: string; quantity: number; entryPrice: number; currentPrice: number; unrealizedPnl: number; stopLoss: number | null }>;
+  };
+  backtestRuns: Array<{ id: string; strategy: string; asset: string; startDate: string; endDate: string; initialQuote: number; finalQuote: number; totalReturn: number; maxDrawdown: number; sharpeRatio: number | null; sortinoRatio: number | null; totalTrades: number; aiCostUsd: number; createdAt: string }>;
 }
 
 function formatNum(n: number, decimals = 2): string {
@@ -59,7 +64,10 @@ export default function DashboardPage() {
     async function fetchData() {
       try {
         const res = await fetch("/api/dashboard");
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          if (!cancelled) setError(`HTTP ${res.status}`);
+          return;
+        }
         const json = await res.json() as DashboardData;
         if (!cancelled) { setData(json); setError(null); }
       } catch (err) {
@@ -250,6 +258,55 @@ export default function DashboardPage() {
                   {d.stopLoss !== null && ` • SL: ${formatNum(d.stopLoss, 2)}`}
                   {" • "}{new Date(d.createdAt).toLocaleTimeString()}
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {/* Paper Portfolio */}
+      <Section title="🧪 Paper Portfolio">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm mb-4">
+          <div><div className="text-gray-500">Cash</div><div className="text-white font-bold">{formatUsd(data.paperPortfolio.balance)}</div></div>
+          <div><div className="text-gray-500">Total value</div><div className="text-white font-bold">{formatUsd(data.paperPortfolio.totalValue)}</div></div>
+          <div><div className="text-gray-500">Exposure</div><div className="text-white font-bold">{formatUsd(data.paperPortfolio.totalExposure)}</div></div>
+          <div><div className="text-gray-500">Daily P&amp;L</div><div className={data.paperPortfolio.dailyPnl >= 0 ? "text-green-400 font-bold" : "text-red-400 font-bold"}>{formatUsd(data.paperPortfolio.dailyPnl)}</div></div>
+          <div><div className="text-gray-500">Peak value</div><div className="text-white font-bold">{formatUsd(data.paperPortfolio.peakValue)}</div></div>
+        </div>
+        {data.paperPortfolio.positions.length === 0 ? (
+          <p className="text-gray-500 text-sm">No open paper positions.</p>
+        ) : (
+          <div className="space-y-2">
+            {data.paperPortfolio.positions.map((position) => (
+              <div key={`${position.asset}-${position.side}`} className="grid grid-cols-2 md:grid-cols-6 gap-2 bg-gray-800 rounded p-2 text-xs">
+                <span className="text-white font-bold">{position.asset} {position.side}</span>
+                <span>Qty: {formatNum(position.quantity, 6)}</span>
+                <span>Entry: {formatNum(position.entryPrice, 2)}</span>
+                <span>Mark: {formatNum(position.currentPrice, 2)}</span>
+                <span className={position.unrealizedPnl >= 0 ? "text-green-400" : "text-red-400"}>P&amp;L: {formatUsd(position.unrealizedPnl)}</span>
+                <span>{position.stopLoss === null ? "SL: n/a" : `SL: ${formatNum(position.stopLoss, 2)}`}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {/* Backtesting */}
+      <Section title="📐 Latest Backtests">
+        {data.backtestRuns.length === 0 ? (
+          <p className="text-gray-500 text-sm">No backtest runs yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {data.backtestRuns.map((run) => (
+              <div key={run.id} className="grid grid-cols-2 md:grid-cols-8 gap-2 bg-gray-800 rounded p-2 text-xs">
+                <span className="text-white font-bold">{run.strategy}</span>
+                <span>{run.asset}</span>
+                <span className={run.totalReturn >= 0 ? "text-green-400" : "text-red-400"}>Return: {formatNum(run.totalReturn)}%</span>
+                <span className="text-yellow-400">DD: {formatNum(run.maxDrawdown)}%</span>
+                <span>Sharpe: {run.sharpeRatio === null ? "n/a" : formatNum(run.sharpeRatio)}</span>
+                <span>Trades: {run.totalTrades}</span>
+                <span>Final: {formatUsd(run.finalQuote)}</span>
+                <span>AI: {formatUsd(run.aiCostUsd)}</span>
               </div>
             ))}
           </div>

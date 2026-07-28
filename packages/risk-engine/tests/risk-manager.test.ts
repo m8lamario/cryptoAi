@@ -13,7 +13,7 @@ const defaultRiskProfile: RiskProfileConfig = {
 const healthyPortfolio: PortfolioSnapshot = {
   totalValue: 10000,
   currentExposure: 500,
-  assetExposure: 100,
+  assetExposure: 0,
   peakValue: 12000,
   dailyPnl: 50,
 };
@@ -286,6 +286,7 @@ describe("Risk Manager — Portfolio exposure", () => {
         riskProfile: {
           ...defaultRiskProfile,
           maxPortfolioExposurePercent: 50,
+          maxAssetExposurePercent: 100,
         },
       }),
     );
@@ -294,6 +295,21 @@ describe("Risk Manager — Portfolio exposure", () => {
     // Let's just verify it blocks for exposure
     expect(decision.status).toBe("BLOCK");
     expect(decision.ruleCode).toBe("MAX_PORTFOLIO_EXPOSURE");
+  });
+});
+
+describe("Risk Manager — Asset exposure", () => {
+  it("blocks when existing asset exposure plus the new position exceeds the limit", () => {
+    const decision = evaluateTradeProposal(
+      makeProposal(),
+      makeOptions({
+        portfolio: { ...healthyPortfolio, assetExposure: 2_900 },
+        riskProfile: { ...defaultRiskProfile, maxAssetExposurePercent: 30 },
+      }),
+    );
+
+    expect(decision.status).toBe("BLOCK");
+    expect(decision.ruleCode).toBe("MAX_ASSET_EXPOSURE");
   });
 });
 

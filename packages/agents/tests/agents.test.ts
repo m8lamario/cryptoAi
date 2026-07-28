@@ -295,6 +295,39 @@ describe("ManagerAgent", () => {
     expect(AgentReportSchema.safeParse(report).success).toBe(true);
   });
 
+  it("returns a TradeProposal separately from the manager report", async () => {
+    const gateway = createTestGateway([
+      JSON.stringify({
+        action: "SELL",
+        confidence: 0.8,
+        suggestedRiskFraction: 0.03,
+        rationale: ["Macro and technical reports agree on a defensive action"],
+        invalidationConditions: ["Price reclaims resistance"],
+        isAmbiguous: false,
+        ambiguityReason: null,
+      }),
+    ]);
+
+    const manager = new ManagerAgent({ minValidReports: 2 });
+    const result = await manager.runProposal({
+      ...assetContext,
+      gateway,
+      input: {
+        symbol: "BTCUSDT",
+        reports: [
+          makeAgentReport({ agentId: "technical-agent", signal: "SELL", score: -0.7 }),
+          makeAgentReport({ agentId: "macro-agent", signal: "SELL", score: -0.5 }),
+        ],
+      },
+    });
+
+    expect(result.report.status).toBe("VALID");
+    expect(result.proposal.status).toBe("VALID");
+    expect(result.proposal.action).toBe("SELL");
+    expect(result.proposal.suggestedRiskFraction).toBe(0.03);
+    expect(result.proposal.reportIds).toEqual(["run-test", "run-test"]);
+  });
+
   it("returns UNAVAILABLE when not enough valid reports", async () => {
     const agent = new ManagerAgent({ minValidReports: 3 });
     const report = await agent.run({

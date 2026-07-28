@@ -35,7 +35,7 @@ export class AgentOrchestrator {
    * Agents run concurrently via Promise.allSettled — one failing agent doesn't block others.
    */
   async runAll(
-    assetContext: Omit<AgentRunContext, "symbol" | "baseAsset" | "quoteAsset"> & {
+    assetContext: Omit<AgentRunContext, "gateway" | "symbol" | "baseAsset" | "quoteAsset"> & {
       symbol: string;
       baseAsset: string;
       quoteAsset: string;

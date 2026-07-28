@@ -149,24 +149,24 @@ export async function runQuantitativeBot(config: BacktestConfig): Promise<Backte
   let peak = config.initialQuote;
   let maxDd = 0;
 
-  for (let i = 50; i < candles.length; i++) {
-    const price = Number(candles[i]!.close);
+  // A signal based on candle i can only be executed on candle i+1.
+  for (let i = 50; i < candles.length - 1; i++) {
+    const executionCandle = candles[i + 1]!;
+    const price = Number(executionCandle.open);
     const sma20Val = sma20[i];
     const sma50Val = sma50[i];
 
     if (sma20Val == null || sma50Val == null) continue;
 
-    const s20 = sma20Val;
-    const s50 = sma50Val;
-    const signal = s20 > s50 ? "BUY" : "SELL";
+    const signal = sma20Val > sma50Val ? "BUY" : "SELL";
 
     if (signal === "BUY" && quantity === 0) {
       // Open LONG
-      entryPrice = price;
       const slippagePrice = price * (1 + config.slippagePercent / 100);
       const commission = slippagePrice * config.initialQuote / price * config.commissionRate;
       quantity = config.initialQuote / slippagePrice;
-      quote -= config.initialQuote;
+      entryPrice = slippagePrice;
+      quote -= config.initialQuote + commission;
       totalCommission += commission;
       totalSlippage += (slippagePrice - price) * quantity;
     } else if (signal === "SELL" && quantity > 0) {
@@ -177,12 +177,13 @@ export async function runQuantitativeBot(config: BacktestConfig): Promise<Backte
         exitPrice: slippagePrice,
         quantity,
         commissionRate: config.commissionRate,
-        slippagePercent: config.slippagePercent,
+        slippagePercent: 0,
       });
       trades.push({ netPnl: pnl.netPnl });
-      quote += quantity * slippagePrice - pnl.commissionCost;
-      totalCommission += pnl.commissionCost;
-      totalSlippage += pnl.slippageCost;
+      const exitCommission = quantity * slippagePrice * config.commissionRate;
+      quote += quantity * slippagePrice - exitCommission;
+      totalCommission += exitCommission;
+      totalSlippage += (price - slippagePrice) * quantity;
       quantity = 0;
     }
 
@@ -278,13 +279,14 @@ export async function runHybridBacktest(config: BacktestConfig): Promise<Backtes
     if (!action || (action !== "BUY" && action !== "SELL")) continue;
 
     // Find matching candle for the proposal timestamp
-    const candle = candles.find((c) => c.closeTime >= proposal.createdAt);
+    // The first candle opening after proposal creation is the earliest
+    // executable price and avoids using information from the signal candle.
+    const candle = candles.find((c) => c.openTime >= proposal.createdAt);
     if (!candle) continue;
 
-    const price = Number(candle.close);
+    const price = Number(candle.open);
 
     if (action === "BUY" && quantity === 0) {
-      entryPrice = price;
       const riskFraction = proposal.suggestedRiskFraction ? Number(proposal.suggestedRiskFraction) : 0.02;
       const riskAmount = quote * riskFraction;
       const fallbackStop = price * 0.05;
@@ -295,6 +297,7 @@ export async function runHybridBacktest(config: BacktestConfig): Promise<Backtes
 
       if (actualQty * slippagePrice + commission <= quote) {
         quantity = actualQty;
+        entryPrice = slippagePrice;
         quote -= actualQty * slippagePrice + commission;
         totalCommission += commission;
         totalSlippage += (slippagePrice - price) * actualQty;
@@ -307,12 +310,13 @@ export async function runHybridBacktest(config: BacktestConfig): Promise<Backtes
         exitPrice: slippagePrice,
         quantity,
         commissionRate: config.commissionRate,
-        slippagePercent: config.slippagePercent,
+        slippagePercent: 0,
       });
       trades.push({ netPnl: pnl.netPnl });
-      quote += quantity * slippagePrice - pnl.commissionCost;
-      totalCommission += pnl.commissionCost;
-      totalSlippage += pnl.slippageCost;
+      const exitCommission = quantity * slippagePrice * config.commissionRate;
+      quote += quantity * slippagePrice - exitCommission;
+      totalCommission += exitCommission;
+      totalSlippage += (price - slippagePrice) * quantity;
       quantity = 0;
     }
 
@@ -416,8 +420,7 @@ function computeSortino(dailyReturns: number[]): number | null {
   if (downside.length === 0) return null;
   const downsideVar = downside.reduce((s, r) => s + r ** 2, 0) / downside.length;
   if (downsideVar === 0) return 0;
-  const sortino = mean / Math.sqrt(downsideVar) * Math.sqrt(365);
-  return sortino;
+  return mean / Math.sqrt(downsideVar) * Math.sqrt(365);
 }
 
 function computeDailyReturns(prices: number[]): number[] {
@@ -429,7 +432,7 @@ function computeDailyReturns(prices: number[]): number[] {
 }
 
 function makeEmptyMetrics(config: BacktestConfig): BacktestMetrics {
-  const metrics: BacktestMetrics = {
+  return {
     strategy: config.strategy,
     asset: config.asset,
     startDate: config.startDate.toISOString(),
@@ -448,5 +451,4 @@ function makeEmptyMetrics(config: BacktestConfig): BacktestMetrics {
     slippageCost: 0,
     aiCostUsd: 0,
   };
-  return metrics;
 }
