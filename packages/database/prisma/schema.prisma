@@ -157,3 +157,64 @@ model RiskDecision {
   asset           String
   createdAt       DateTime @default(now())
 }
+
+// --- Phase 5: Memory & Evaluation ---
+
+model StoredAgentReport {
+  id              String   @id @default(cuid())
+  runId           String   @unique
+  agentId         String
+  agentVersion    String
+  promptVersion   String
+  requestedModel  String
+  actualModel     String?
+  asset           String
+  horizon         String   // SHORT | MEDIUM | LONG
+  signal          String?  // BUY | SELL | HOLD | WAIT | null
+  score           Decimal  @db.Decimal(4, 2)
+  confidence      Decimal  @db.Decimal(4, 2)
+  dataQuality     Decimal  @db.Decimal(4, 2)
+  reasoning       Json
+  supportingEvidence Json
+  opposingEvidence   Json
+  sourceIds       String[]
+  promptTokens    Int
+  completionTokens Int
+  latencyMs       Int
+  estimatedCostUsd Decimal @db.Decimal(12, 6)
+  status          String   // VALID | UNAVAILABLE | INVALID
+  createdAt       DateTime @default(now())
+
+  @@index([agentId, createdAt])
+  @@index([asset, createdAt])
+  @@index([createdAt])
+}
+
+model StoredTradeProposal {
+  id                    String   @id @default(cuid())
+  runId                 String   @unique
+  asset                 String
+  action                String?  // BUY | SELL | HOLD | WAIT | null
+  confidence            Decimal  @db.Decimal(4, 2)
+  suggestedRiskFraction Decimal? @db.Decimal(4, 2)
+  rationale             Json
+  reportIds             String[]
+  invalidationConditions Json
+  expiresAt             DateTime?
+  status                String   // VALID | NO_ACTION | UNAVAILABLE | INVALID | AMBIGUOUS
+  decisionGateResult    String?  // APPROVE | BLOCK | MANUAL_REVIEW (if processed)
+  riskDecisionId        String?  // FK to RiskDecision if one was produced
+  managerAgentVersion   String
+  managerPromptVersion  String
+  requestedModel        String
+  actualModel           String?
+  promptTokens          Int
+  completionTokens      Int
+  latencyMs             Int
+  estimatedCostUsd      Decimal  @db.Decimal(12, 6)
+  createdAt             DateTime @default(now())
+
+  @@index([asset, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
+}

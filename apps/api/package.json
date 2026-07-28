@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@cryptoai/analytics": "workspace:*",
     "@cryptoai/config": "workspace:*",
     "@cryptoai/contracts": "workspace:*",
     "@cryptoai/database": "workspace:*",

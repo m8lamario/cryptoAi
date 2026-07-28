@@ -9,6 +9,7 @@ import { healthRouter } from "./routes/health.js";
 import { readyRouter } from "./routes/ready.js";
 import { privateRouter } from "./routes/private.js";
 import { createMarketDataRouter } from "./routes/market-data.js";
+import { createAnalyticsRouter } from "./routes/analytics.js";
 import { requireAuth } from "./auth/middleware.js";
 import { createAuthRouter } from "./auth/router.js";
 import { InMemoryRateLimiter } from "./auth/rateLimiter.js";
@@ -41,6 +42,7 @@ export function createApp(deps: AppDeps = {}): Express {
   app.use("/auth", createAuthRouter(authStore, rateLimiter, authConfig));
   app.use("/private", requireAuth(authStore), privateRouter);
   app.use("/market-data", createMarketDataRouter());
+  app.use("/analytics", createAnalyticsRouter());
 
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: "Not found" });

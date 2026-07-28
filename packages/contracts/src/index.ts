@@ -153,3 +153,32 @@ export interface DecisionGateResponse {
   ruleCode?: string;
   proposal: TradeProposalResponse | null;
 }
+
+// --- Phase 5: Memory & Evaluation ---
+
+export interface AgentMetricsResponse {
+  agentId: string;
+  totalReports: number;
+  validCount: number;
+  unavailableCount: number;
+  invalidCount: number;
+  validJsonRate: number;
+  fallbackRate: number;
+  avgLatencyMs: number;
+  totalCostUsd: number;
+  avgConfidence: number;
+  avgScore: number;
+  signalDistribution: Record<string, number>;
+  modelAccuracy: number;
+}
+
+export interface SystemStatsResponse {
+  totalAgentReports: number;
+  totalProposals: number;
+  totalRiskDecisions: number;
+  approvedCount: number;
+  blockedCount: number;
+  totalAiCostUsd: number;
+  reportStatusBreakdown: Record<string, number>;
+  proposalStatusBreakdown: Record<string, number>;
+}
