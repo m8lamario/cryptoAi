@@ -18,7 +18,10 @@ export const TradeProposalSchema = z.object({
   asset: z.string(),
   action: TradeActionSchema.nullable(),
   confidence: z.number().min(0).max(1),
+  rationale: z.array(z.string()),
+  reportIds: z.array(z.string()),
   suggestedRiskFraction: z.number().min(0).max(1).nullable(),
+  invalidationConditions: z.array(z.string()),
   expiresAt: z.string().datetime().nullable(),
 });
 
@@ -112,4 +115,3 @@ export interface PositionSizingResult {
   stopLoss: number | null;
   riskAmount: number;
 }
-
