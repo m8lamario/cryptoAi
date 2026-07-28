@@ -218,3 +218,80 @@ model StoredTradeProposal {
   @@index([status, createdAt])
   @@index([createdAt])
 }
+
+// --- Phase 7: Paper Trading & Backtesting ---
+
+model PaperBalance {
+  id        String   @id @default(cuid())
+  quote     Decimal  @db.Decimal(24, 2) // USDT balance
+  peakValue Decimal  @db.Decimal(24, 2)
+  dailyPnl  Decimal  @db.Decimal(24, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PaperOrder {
+  id              String   @id @default(cuid())
+  orderId         String   @unique
+  asset           String
+  side            String   // BUY | SELL
+  type            String   // MARKET | LIMIT
+  quantity        Decimal  @db.Decimal(24, 8)
+  price           Decimal  @db.Decimal(24, 8)
+  commission      Decimal  @db.Decimal(24, 8)
+  slippagePercent Decimal  @db.Decimal(8, 4)
+  status          String   // PENDING | FILLED | CANCELLED | REJECTED
+  proposalRunId   String?
+  riskDecisionId  String?
+  backtestRunId   String?
+  executedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([asset, createdAt])
+  @@index([status, createdAt])
+  @@index([backtestRunId])
+}
+
+model PaperPosition {
+  id            String   @id @default(cuid())
+  asset         String
+  side          String   // LONG | SHORT
+  quantity      Decimal  @db.Decimal(24, 8)
+  entryPrice    Decimal  @db.Decimal(24, 8)
+  currentPrice  Decimal  @db.Decimal(24, 8)
+  unrealizedPnl Decimal  @db.Decimal(24, 8)
+  stopLoss      Decimal? @db.Decimal(24, 8)
+  openedAt      DateTime @default(now())
+  closedAt      DateTime?
+  status        String   @default("OPEN") // OPEN | CLOSED
+
+  @@index([asset])
+  @@index([status])
+  @@unique([asset, status])
+}
+
+model BacktestRun {
+  id            String   @id @default(cuid())
+  strategy      String   // BUY_AND_HOLD | QUANTITATIVE | HYBRID_AI
+  asset         String
+  startDate     DateTime
+  endDate       DateTime
+  initialQuote  Decimal  @db.Decimal(24, 2)
+  finalQuote    Decimal  @db.Decimal(24, 2)
+  totalReturn   Decimal  @db.Decimal(8, 4)
+  maxDrawdown   Decimal  @db.Decimal(8, 4)
+  sharpeRatio   Decimal? @db.Decimal(8, 4)
+  sortinoRatio  Decimal? @db.Decimal(8, 4)
+  totalTrades   Int
+  winRate       Decimal? @db.Decimal(6, 4)
+  avgProfit     Decimal? @db.Decimal(24, 8)
+  avgLoss       Decimal? @db.Decimal(24, 8)
+  commissionCost    Decimal  @db.Decimal(24, 8)
+  slippageCost      Decimal  @db.Decimal(24, 8)
+  aiCostUsd         Decimal  @db.Decimal(12, 6)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([strategy, createdAt])
+  @@index([asset, createdAt])
+}
