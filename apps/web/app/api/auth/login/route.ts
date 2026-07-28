@@ -5,8 +5,15 @@ export const dynamic = "force-dynamic";
 
 const API_BASE = process.env["API_BASE_URL"] ?? "http://localhost:4000";
 
+function getBaseUrl(req: NextRequest): string {
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "localhost:3001";
+  const proto = req.headers.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}`;
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const contentType = req.headers.get("content-type") ?? "";
+  const base = getBaseUrl(req);
 
   let body: string;
   let apiContentType: string;
@@ -43,11 +50,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // HTML form submission: redirect on success, back to login on failure
   if (contentType.includes("application/x-www-form-urlencoded")) {
     if (apiRes.ok && setCookie) {
-      const redirect = NextResponse.redirect(new URL("/", req.url));
+      const redirect = NextResponse.redirect(new URL("/", base));
       redirect.headers.set("set-cookie", setCookie);
       return redirect;
     }
-    return NextResponse.redirect(new URL("/login?error=1", req.url));
+    return NextResponse.redirect(new URL("/login?error=1", base));
   }
 
   // JSON / API call: forward the response

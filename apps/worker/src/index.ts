@@ -1,4 +1,11 @@
-import "dotenv/config";
+import { config as dotenvConfig } from "dotenv";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+// Load .env from repository root (apps/worker/src → ../../../.env)
+dotenvConfig({ path: join(__dirname, "..", "..", "..", ".env") });
+
 import { getServerConfig } from "@cryptoai/config";
 import { logger } from "./logger.js";
 import { createSystemHealthQueue, createSystemHealthWorker } from "./queues/system-health.js";

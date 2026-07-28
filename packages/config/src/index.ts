@@ -30,7 +30,16 @@ export function getServerConfig(): ServerConfig {
 }
 
 const authEnvSchema = z.object({
-  APP_ORIGIN: z.string().url().default("http://localhost:3000"),
+  APP_ORIGIN: z
+    .string()
+    .refine(
+      (val) =>
+        val.split(",").every((o) =>
+          z.string().url().safeParse(o.trim()).success
+        ),
+      { message: "APP_ORIGIN must be a valid URL or comma-separated list of valid URLs" }
+    )
+    .default("http://localhost:3000"),
   API_BASE_URL: z.string().url().default("http://localhost:4000"),
   SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
   SESSION_COOKIE_SECURE: z.enum(["true", "false", "1", "0"]).optional(),

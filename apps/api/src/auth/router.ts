@@ -29,7 +29,8 @@ interface CookieOptions {
 function isCsrfAllowed(req: Request, appOrigin: string): boolean {
   const origin = req.headers["origin"];
   if (!origin) return true; // curl / server-to-server: no browser, allow
-  return origin === appOrigin;
+  const allowed = appOrigin.split(",").map((o) => o.trim());
+  return allowed.includes(origin);
 }
 
 function getIp(req: Request): string {

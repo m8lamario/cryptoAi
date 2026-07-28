@@ -1,5 +1,6 @@
-export default function LoginPage({ searchParams }: { searchParams?: { error?: string } }) {
-  const hasError = searchParams?.error === "1";
+export default async function LoginPage({ searchParams }: { searchParams?: Promise<{ error?: string }> }) {
+  const params = await searchParams;
+  const hasError = params?.error === "1";
 
   return (
     <main className="flex min-h-screen items-center justify-center p-8 bg-background text-foreground">

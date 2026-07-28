@@ -5,8 +5,15 @@ export const dynamic = "force-dynamic";
 
 const API_BASE = process.env["API_BASE_URL"] ?? "http://localhost:4000";
 
+function getBaseUrl(req: NextRequest): string {
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "localhost:3001";
+  const proto = req.headers.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}`;
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const cookieHeader = req.headers.get("cookie") ?? "";
+  const base = getBaseUrl(req);
 
   let apiRes: Response;
   try {
@@ -20,7 +27,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const setCookie = apiRes.headers.get("set-cookie");
-  const response = NextResponse.redirect(new URL("/login", req.url), 303);
+  const response = NextResponse.redirect(new URL("/login", base), 303);
 
   // Forward cookie-clear header from API
   if (setCookie) {
