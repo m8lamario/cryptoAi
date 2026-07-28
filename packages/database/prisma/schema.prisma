@@ -73,3 +73,62 @@ model AuthAuditEvent {
   metadata  Json?
   createdAt DateTime @default(now())
 }
+
+model Asset {
+  id         String   @id @default(cuid())
+  symbol     String   @unique
+  baseAsset  String
+  quoteAsset String
+  name       String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  candles    PriceCandle[]
+  snapshots  MarketSnapshot[]
+}
+
+model PriceCandle {
+  id          String   @id @default(cuid())
+  assetId     String
+  asset       Asset    @relation(fields: [assetId], references: [id])
+  openTime    DateTime
+  closeTime   DateTime
+  open        Decimal  @db.Decimal(24, 8)
+  high        Decimal  @db.Decimal(24, 8)
+  low         Decimal  @db.Decimal(24, 8)
+  close       Decimal  @db.Decimal(24, 8)
+  volume      Decimal  @db.Decimal(24, 8)
+  quoteVolume Decimal  @db.Decimal(30, 8)
+  trades      Int
+  interval    String   @default("15m")
+  createdAt   DateTime @default(now())
+
+  @@unique([assetId, openTime, interval])
+  @@index([assetId, openTime])
+}
+
+model MarketSnapshot {
+  id              String   @id @default(cuid())
+  assetId         String
+  asset           Asset    @relation(fields: [assetId], references: [id])
+  price           Decimal  @db.Decimal(24, 8)
+  change24h       Decimal? @db.Decimal(12, 4)
+  volume24h       Decimal? @db.Decimal(30, 8)
+  high24h         Decimal? @db.Decimal(24, 8)
+  low24h          Decimal? @db.Decimal(24, 8)
+  collectedAt     DateTime @default(now())
+  collectionRunId String?
+  collectionRun   DataCollectionRun? @relation(fields: [collectionRunId], references: [id])
+
+  @@unique([assetId, collectedAt])
+}
+
+model DataCollectionRun {
+  id        String           @id @default(cuid())
+  startedAt DateTime         @default(now())
+  endedAt   DateTime?
+  status    String           @default("RUNNING")
+  provider  String
+  error     String?
+  snapshots MarketSnapshot[]
+}

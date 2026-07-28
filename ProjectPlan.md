@@ -1,7 +1,7 @@
 # Project Plan: Hybrid AI Crypto Investment Agent
 
-**Versione:** 1.2  
-**Data:** 17 luglio 2026  
+**Versione:** 1.3  
+**Data:** 28 luglio 2026  
 **Ambito:** applicazione privata, single-user e self-hosted  
 **Piattaforma prevista:** mini PC Intel N100  
 **Obiettivo:** realizzare un assistente personale ibrido per l'analisi del mercato crypto, nel quale agenti AI producono valutazioni strutturate mentre dati, calcoli, gestione del rischio ed esecuzione rimangono deterministici e verificabili.
@@ -135,14 +135,28 @@ Il mini PC ospita:
 
 L'inferenza AI principale non viene eseguita localmente. Il mini PC richiama OpenRouter tramite un AI Gateway server-side.
 
-### 2.2 OpenRouter e DeepSeek V4 Pro
+### 2.2 OpenRouter e modello per ruolo
 
 Provider AI iniziale:
 
 ```text
 Provider: OpenRouter
-Modello preferito: deepseek/deepseek-v4-pro
 ```
+
+Il modello non è fisso per tutto il sistema. Ogni ruolo ha un modello configurabile indipendentemente tramite l'AI Gateway, scelto secondo due criteri: costo/complessità del compito e diversità rispetto agli altri ruoli.
+
+```text
+Technical AI Agent   : modello economico con reasoning nativo (compito quasi meccanico
+                        su indicatori già calcolati)
+Macro AI Agent        : modello economico con reasoning nativo
+News AI Agent         : modello di fascia media (richiede distinzione fatto/opinione)
+Sentiment AI Agent    : modello di fascia media
+Whale AI Agent        : modello economico con reasoning nativo
+Investment Manager AI : modello di famiglia diversa rispetto agli analisti
+Second Opinion         : modello di famiglia diversa, reasoning massimo, solo casi rari
+```
+
+Principio: l'Investment Manager deve appartenere a una famiglia di modelli diversa da quella usata per la maggioranza degli agenti analisti, per evitare che l'aggregatore condivida gli stessi bias sistematici dei report che sta valutando. La scelta puntuale dei modelli (nomi ed endpoint) è configurazione, non architettura, e va verificata e aggiornata periodicamente contro il catalogo corrente di OpenRouter, poiché disponibilità e prezzi cambiano nel tempo. La combinazione finale va validata in Fase 2B confrontando costo e qualità dei report su dati storici, prima di fissarla per la Fase 3.
 
 Linee guida applicative:
 
@@ -154,10 +168,17 @@ Linee guida applicative:
 - eventuale Second Opinion: `xhigh`, solo per casi rari;
 - temperature bassa;
 - output obbligatoriamente strutturato;
-- budget giornaliero e mensile configurabile;
+- budget giornaliero e mensile configurabile, per agente e complessivo;
 - nessun fallback a pagamento non autorizzato.
 
 Nonostante il provider possa offrire finestre di contesto superiori, il software deve inviare soltanto dati pertinenti e sintetici.
+
+### 2.5 Cadenza operativa
+
+- Livello deterministico (raccolta dati, indicatori): ogni 15 minuti.
+- Ciclo AI completo (agenti attivi + Investment Manager): ogni 1 ora, come baseline.
+- Rivalutazione anticipata event-driven: solo su variazione di prezzo superiore a una soglia configurabile (es. ±3% in 15 minuti), non su ogni notizia o evento minore, per mantenere il costo prevedibile.
+- La cadenza del ciclo AI è configurabile e va ricalibrata quando il numero di agenti attivi aumenta (vedi Fase 3).
 
 ### 2.3 AI Gateway
 
@@ -231,7 +252,7 @@ Un report `UNAVAILABLE` o `INVALID` non può contenere un segnale finanziario va
 L'Investment Manager produce:
 
 ```text
-status: VALID | NO_ACTION | UNAVAILABLE | INVALID
+status: VALID | NO_ACTION | UNAVAILABLE | INVALID | AMBIGUOUS
 asset
 action: BUY | SELL | HOLD | WAIT | null
 confidence
@@ -243,6 +264,8 @@ expiresAt
 ```
 
 `suggestedRiskFraction` è soltanto un suggerimento percentuale. L'importo finale viene calcolato dal Position Sizer.
+
+`status: AMBIGUOUS` indica disaccordo significativo fra gli agenti (es. segnali opposti con confidence comparabile, o varianza alta nei punteggi pesati per confidence). Una proposta `AMBIGUOUS` non può generare l'apertura automatica di una posizione: il Decision Gate la instrada verso una notifica di richiesta di decisione manuale (vedi Fase 4 e Fase 6), riportando i singoli `AgentReport` coinvolti. Una decisione manuale successiva passa comunque attraverso il Risk Manager come qualsiasi altra proposta.
 
 ### 3.3 RiskDecision
 
@@ -507,6 +530,8 @@ Attività:
 
 ### Fase 3 - Agenti AI specializzati
 
+**Priorità:** 3.2 (Technical) e 3.5 (Macro) sono l'MVP obbligatorio: sono i più economici in termini di dati, i più verificabili in backtest storico e sufficienti per validare l'intera catena end-to-end (Manager → Decision Gate → Risk Manager → Paper Executor). 3.1 (News), 3.3 (Sentiment) e 3.4 (Whale) sono incrementali: vanno aggiunti uno alla volta solo dopo che l'MVP è stabile in paper trading, e ciascuno va valutato isolatamente per verificare che aggiunga valore reale e non solo rumore o costo. News, Sentiment e Whale sono difficili da validare in backtest walk-forward per mancanza di dati storici point-in-time affidabili: la loro validazione primaria avviene in paper trading forward, non nel backtest della Fase 7.
+
 #### 3.1 News AI Agent
 
 - analisi di titoli e contenuti recuperati dal software;
@@ -553,7 +578,8 @@ Attività:
 - quorum minimo;
 - confronto di evidenze favorevoli e contrarie;
 - qualità dei dati;
-- gestione del disaccordo;
+- gestione del disaccordo: se la varianza dei punteggi degli agenti pesati per confidence supera una soglia configurabile, o se agenti con confidence comparabile producono segnali opposti, la proposta ottiene `status: AMBIGUOUS` invece di un'azione automatica;
+- notifica Telegram per ogni proposta `AMBIGUOUS`, con il riepilogo di `signal`, `score`, `confidence` e una sintesi del `reasoning` per ciascun `AgentReport` coinvolto, per consentire una decisione manuale informata;
 - output `TradeProposal`;
 - scadenza della proposta;
 - condizioni di invalidazione;
