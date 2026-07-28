@@ -132,3 +132,28 @@ model DataCollectionRun {
   error     String?
   snapshots MarketSnapshot[]
 }
+
+// --- Phase 2: Quantitative & Risk Engine ---
+
+model KillSwitch {
+  id        String   @id @default(cuid())
+  active    Boolean  @default(false)
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RiskDecision {
+  id              String   @id @default(cuid())
+  status          String   // APPROVE | BLOCK
+  ruleCode        String
+  reason          String
+  proposalJson    Json
+  observedValue   Decimal? @db.Decimal(24, 8)
+  configuredLimit Decimal? @db.Decimal(24, 8)
+  positionSize    Decimal? @db.Decimal(24, 8)
+  stopLoss        Decimal? @db.Decimal(24, 8)
+  idempotencyKey  String   @unique
+  asset           String
+  createdAt       DateTime @default(now())
+}

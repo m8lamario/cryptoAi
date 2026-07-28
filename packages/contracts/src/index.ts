@@ -67,3 +67,37 @@ export interface CollectionStatusResponse {
   } | null;
   assetCount: number;
 }
+
+// --- Phase 2: Quantitative & Risk Engine ---
+
+export interface KillSwitchResponse {
+  active: boolean;
+  reason: string | null;
+  updatedAt: string;
+}
+
+export interface RiskDecisionResponse {
+  id: string;
+  status: "APPROVE" | "BLOCK";
+  ruleCode: string;
+  reason: string;
+  asset: string;
+  observedValue: number | null;
+  configuredLimit: number | null;
+  positionSize: number | null;
+  stopLoss: number | null;
+  idempotencyKey: string;
+  decidedAt: string;
+}
+
+export interface RiskDecisionsResponse {
+  decisions: RiskDecisionResponse[];
+  count: number;
+}
+
+export interface RiskProfileResponse {
+  maxPortfolioExposurePercent: number;
+  maxAssetExposurePercent: number;
+  maxDailyLossPercent: number;
+  maxDrawdownPercent: number;
+}
