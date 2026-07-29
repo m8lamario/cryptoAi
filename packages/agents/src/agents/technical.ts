@@ -97,7 +97,7 @@ export class TechnicalAgent extends BaseAgent {
       agentId: config.agentId ?? "technical-agent",
       agentVersion: config.agentVersion ?? "1.0.0",
       promptVersion: config.promptVersion ?? "1.0.0",
-      model: config.model ?? "deepseek/deepseek-v4-pro",
+      model: config.model ?? "deepseek/deepseek-v4-flash",
       temperature: config.temperature ?? 0.2,
       maxTokens: config.maxTokens ?? 1500,
       reasoning: config.reasoning ?? "high",

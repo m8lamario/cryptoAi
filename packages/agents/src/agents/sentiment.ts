@@ -85,7 +85,7 @@ export class SentimentAgent extends BaseAgent {
       agentId: config.agentId ?? "sentiment-agent",
       agentVersion: config.agentVersion ?? "1.0.0",
       promptVersion: config.promptVersion ?? "1.0.0",
-      model: config.model ?? "deepseek/deepseek-v4-pro",
+      model: config.model ?? "deepseek/deepseek-v4-flash",
       temperature: config.temperature ?? 0.3,
       maxTokens: config.maxTokens ?? 1500,
       reasoning: config.reasoning ?? "high",

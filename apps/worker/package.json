@@ -12,10 +12,15 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@cryptoai/agents": "workspace:*",
+    "@cryptoai/ai-gateway": "workspace:*",
     "@cryptoai/config": "workspace:*",
     "@cryptoai/contracts": "workspace:*",
     "@cryptoai/database": "workspace:*",
     "@cryptoai/market-data": "workspace:*",
+    "@cryptoai/paper-executor": "workspace:*",
+    "@cryptoai/quantitative": "workspace:*",
+    "@cryptoai/risk-engine": "workspace:*",
     "bullmq": "^5.57.0",
     "dotenv": "^16.6.1",
     "ioredis": "^5.6.1",

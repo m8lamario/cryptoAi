@@ -1,4 +1,4 @@
-import { prisma } from "./index.js";
+import { prisma } from "./prisma-client.js";
 
 /**
  * Phase 5 — Memory & Persistence.

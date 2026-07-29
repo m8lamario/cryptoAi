@@ -1,15 +1,4 @@
-import { PrismaClient } from "@prisma/client";
-
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
-
-export const prisma: PrismaClient = globalForPrisma.prisma ?? new PrismaClient();
-
-if (process.env["NODE_ENV"] !== "production") {
-  globalForPrisma.prisma = prisma;
-}
-
+export { prisma } from "./prisma-client.js";
 export * from "@prisma/client";
 export * from "./password.js";
 export * from "./memory.js";

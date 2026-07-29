@@ -34,7 +34,7 @@ export class OpenRouterProvider implements AIProvider {
   constructor(config: OpenRouterConfig) {
     this.apiKey = config.apiKey;
     this.baseUrl = config.baseUrl ?? "https://openrouter.ai/api/v1";
-    this.defaultModel = config.defaultModel ?? "deepseek/deepseek-v4-pro";
+    this.defaultModel = config.defaultModel ?? "deepseek/deepseek-v4-flash";
 
     this.headers = {
       Authorization: `Bearer ${this.apiKey}`,

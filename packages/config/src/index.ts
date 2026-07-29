@@ -39,7 +39,7 @@ const authEnvSchema = z.object({
         ),
       { message: "APP_ORIGIN must be a valid URL or comma-separated list of valid URLs" }
     )
-    .default("http://localhost:3000"),
+    .default("http://localhost:3001"),
   API_BASE_URL: z.string().url().default("http://localhost:4000"),
   SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
   SESSION_COOKIE_SECURE: z.enum(["true", "false", "1", "0"]).optional(),

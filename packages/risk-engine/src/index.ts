@@ -5,7 +5,7 @@ export { computePositionSize } from "./position-sizer.js";
 export { evaluateTradeProposal } from "./risk-manager.js";
 export type { RiskManagerOptions } from "./risk-manager.js";
 export { evaluateDecisionGate } from "./decision-gate.js";
-export type { DecisionGateResult, DecisionGateConfig } from "./decision-gate.js";
+export type { DecisionGateResult, DecisionGateConfig, DecisionGateReport } from "./decision-gate.js";
 
 export {
   TradeActionSchema,

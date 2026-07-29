@@ -1,98 +1,88 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { Sidebar } from "../components/Sidebar";
+import { Section } from "../components/Section";
+import { StatsCard } from "../components/StatsCard";
+import { OverviewTab } from "../components/tabs/OverviewTab";
+import { MarketTab } from "../components/tabs/MarketTab";
+import { AgentReportsTab } from "../components/tabs/AgentReportsTab";
+import { ProposalsTab } from "../components/tabs/ProposalsTab";
+import { RiskTab } from "../components/tabs/RiskTab";
+import { PortfolioTab } from "../components/tabs/PortfolioTab";
+import { BacktestsTab } from "../components/tabs/BacktestsTab";
+import { AuditTab } from "../components/tabs/AuditTab";
+import type { DashboardData } from "./types";
 
-interface DashboardData {
-  systemStatus: { healthy: boolean; uptime: number; timestamp: string };
-  marketData: {
-    snapshots: Array<{
-      symbol: string; price: number; change24h: number | null;
-      volume24h: number | null; high24h: number | null; low24h: number | null;
-      collectedAt: string;
-    }>;
-    collectionStatus: { id: string; status: string; startedAt: string; endedAt: string | null; provider: string; error: string | null } | null;
-    assetCount: number;
-  };
-  agentReports: Array<{ runId: string; agentId: string; asset: string; signal: string | null; score: number; confidence: number; status: string; horizon: string; promptTokens: number; latencyMs: number; estimatedCostUsd: number; createdAt: string }>;
-  proposals: Array<{ runId: string; asset: string; action: string | null; confidence: number; status: string; decisionGateResult: string | null; suggestedRiskFraction: number | null; createdAt: string }>;
-  riskDecisions: Array<{ id: string; status: string; ruleCode: string; reason: string; asset: string; positionSize: number | null; stopLoss: number | null; createdAt: string }>;
-  killSwitch: { active: boolean; reason: string | null; updatedAt: string };
-  riskConfig: { maxPortfolioExposurePercent: number; maxAssetExposurePercent: number; maxDailyLossPercent: number; maxDrawdownPercent: number } | null;
-  aiCosts: { totalCostUsd: number; totalPromptTokens: number; totalCompletionTokens: number; avgLatencyMs: number };
-  auditLog: Array<{ id: string; level: string; type: string; message: string; createdAt: string }>;
-  paperPortfolio: {
-    balance: number; peakValue: number; dailyPnl: number; totalExposure: number; totalValue: number;
-    positions: Array<{ asset: string; side: string; quantity: number; entryPrice: number; currentPrice: number; unrealizedPnl: number; stopLoss: number | null }>;
-  };
-  backtestRuns: Array<{ id: string; strategy: string; asset: string; startDate: string; endDate: string; initialQuote: number; finalQuote: number; totalReturn: number; maxDrawdown: number; sharpeRatio: number | null; sortinoRatio: number | null; totalTrades: number; aiCostUsd: number; createdAt: string }>;
-}
-
-function formatNum(n: number, decimals = 2): string {
-  return n.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-}
-
-function formatUsd(n: number): string {
-  return "$" + formatNum(n, 6);
-}
-
-function statusColor(s: string): string {
-  switch (s) {
-    case "VALID": case "APPROVE": case "COMPLETED": return "text-green-400";
-    case "UNAVAILABLE": case "INVALID": case "FAILED": case "CRITICAL": return "text-red-400";
-    case "BLOCK": case "AMBIGUOUS": case "RUNNING": return "text-yellow-400";
-    case "NO_ACTION": return "text-gray-400";
-    default: return "text-white";
-  }
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-      <h2 className="text-lg font-semibold text-gray-200 mb-3">{title}</h2>
-      {children}
-    </div>
-  );
-}
+type Tab =
+  | "overview"
+  | "market"
+  | "reports"
+  | "proposals"
+  | "risk"
+  | "portfolio"
+  | "backtests"
+  | "audit";
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
+
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch("/api/dashboard");
+      if (!res.ok) { setError(`HTTP ${res.status}`); return; }
+      const json = (await res.json()) as DashboardData;
+      setData(json);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    async function fetchData() {
-      try {
-        const res = await fetch("/api/dashboard");
-        if (!res.ok) {
-          if (!cancelled) setError(`HTTP ${res.status}`);
-          return;
-        }
-        const json = await res.json() as DashboardData;
-        if (!cancelled) { setData(json); setError(null); }
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    fetchData();
+    const run = async () => {
+      await fetchData();
+      if (!cancelled) setLoading(false);
+    };
+    run();
     const interval = setInterval(fetchData, 30_000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, []);
+  }, [fetchData]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh] text-gray-400">
-        Loading dashboard...
+      <div className="flex h-screen bg-bg-primary">
+        <div className="flex items-center justify-center flex-1 text-secondary">
+          <div className="text-center">
+            <div className="w-12 h-12 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <div className="text-sm font-medium">Loading dashboard</div>
+            <div className="text-xs text-muted mt-1">Fetching system state…</div>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh] text-red-400">
-        Error loading dashboard: {error}
+      <div className="flex h-screen bg-bg-primary items-center justify-center">
+        <div className="text-center p-8 bg-card border border-border rounded-xl max-w-md">
+          <div className="text-3xl mb-3">⚠️</div>
+          <h2 className="text-lg font-bold text-red mb-2">Connection Error</h2>
+          <p className="text-sm text-secondary mb-4">Could not load dashboard data: {error}</p>
+          <button
+            onClick={() => { setLoading(true); setError(null); fetchData(); }}
+            className="px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -100,256 +90,68 @@ export default function DashboardPage() {
   if (!data) return null;
 
   return (
-    <div className="space-y-6 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">CryptoAI Dashboard</h1>
-          <p className="text-gray-400 text-sm">
-            Uptime: {Math.floor(data.systemStatus.uptime / 3600)}h {Math.floor((data.systemStatus.uptime % 3600) / 60)}m
-            {" • "}
-            {new Date(data.systemStatus.timestamp).toLocaleTimeString()}
-          </p>
-        </div>
-        <div className="flex gap-3">
-          {data.killSwitch.active && (
-            <span className="bg-red-600 text-white px-3 py-1 rounded text-sm font-bold animate-pulse">
-              🚨 KILL SWITCH ACTIVE
-            </span>
-          )}
-          <span className={`px-3 py-1 rounded text-sm ${data.systemStatus.healthy ? "bg-green-800 text-green-200" : "bg-red-800 text-red-200"}`}>
-            {data.systemStatus.healthy ? "● System OK" : "● System Error"}
-          </span>
-          <form action="/api/auth/logout" method="POST">
-            <button type="submit" className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded text-sm">
-              Sign out
-            </button>
-          </form>
-        </div>
-      </div>
+    <div className="flex h-screen bg-bg-primary overflow-hidden">
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        systemHealthy={data.systemStatus.healthy}
+        killSwitchActive={data.killSwitch.active}
+      />
 
-      {/* Market Data */}
-      <Section title="📊 Market Data">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {data.marketData.snapshots.map((s) => (
-            <div key={s.symbol} className="bg-gray-800 rounded p-3">
-              <div className="flex justify-between items-center">
-                <span className="text-white font-bold">{s.symbol}</span>
-                <span className={s.change24h && s.change24h >= 0 ? "text-green-400" : "text-red-400"}>
-                  {s.change24h !== null ? `${s.change24h >= 0 ? "+" : ""}${formatNum(s.change24h, 2)}%` : "N/A"}
-                </span>
-              </div>
-              <div className="text-2xl text-white mt-1">{formatNum(s.price, 2)}</div>
-              <div className="text-gray-500 text-xs mt-2">
-                H: {s.high24h !== null ? formatNum(s.high24h, 2) : "N/A"} / L: {s.low24h !== null ? formatNum(s.low24h, 2) : "N/A"}
-              </div>
-              <div className="text-gray-600 text-xs">
-                Vol: {s.volume24h !== null ? formatNum(s.volume24h, 0) : "N/A"}
-              </div>
-            </div>
-          ))}
-        </div>
-        {data.marketData.collectionStatus && (
-          <div className="mt-3 text-xs text-gray-500">
-            Collection:{" "}
-            <span className={statusColor(data.marketData.collectionStatus.status)}>
-              {data.marketData.collectionStatus.status}
-            </span>
-            {" • "}{data.marketData.collectionStatus.provider}
-            {" • Assets: "}{data.marketData.assetCount}
-            {data.marketData.collectionStatus.error && (
-              <span className="text-red-400 ml-2">Error: {data.marketData.collectionStatus.error}</span>
+      {/* Main content area */}
+      <main className="flex-1 overflow-y-auto">
+        {/* Top bar */}
+        <header className="sticky top-0 z-10 bg-bg-primary/80 backdrop-blur-sm border-b border-border px-6 py-3 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-primary">
+              {activeTab === "overview" && "Dashboard Overview"}
+              {activeTab === "market" && "Market Data"}
+              {activeTab === "reports" && "Agent Reports"}
+              {activeTab === "proposals" && "Trade Proposals"}
+              {activeTab === "risk" && "Risk Decisions"}
+              {activeTab === "portfolio" && "Paper Portfolio"}
+              {activeTab === "backtests" && "Backtest Results"}
+              {activeTab === "audit" && "Audit Log"}
+            </h2>
+            <p className="text-xs text-muted">
+              {new Date(data.systemStatus.timestamp).toLocaleString()}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {data.killSwitch.active && (
+              <span className="bg-red text-white px-3 py-1 rounded-lg text-xs font-bold animate-pulse-glow">
+                🚨 KILL SWITCH
+              </span>
             )}
+            <span
+              className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ${
+                data.systemStatus.healthy
+                  ? "bg-green-dim text-green"
+                  : "bg-red-dim text-red"
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  data.systemStatus.healthy ? "bg-green animate-pulse" : "bg-red"
+                }`}
+              />
+              {data.systemStatus.healthy ? "System OK" : "System Error"}
+            </span>
           </div>
-        )}
-      </Section>
+        </header>
 
-      {/* AI Costs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-3">
-          <div className="text-gray-500 text-xs">AI Cost (total)</div>
-          <div className="text-white text-lg font-bold">{formatUsd(data.aiCosts.totalCostUsd)}</div>
+        {/* Tab content */}
+        <div className="p-6">
+          {activeTab === "overview" && <OverviewTab data={data} />}
+          {activeTab === "market" && <MarketTab data={data} />}
+          {activeTab === "reports" && <AgentReportsTab data={data} />}
+          {activeTab === "proposals" && <ProposalsTab data={data} />}
+          {activeTab === "risk" && <RiskTab data={data} />}
+          {activeTab === "portfolio" && <PortfolioTab data={data} />}
+          {activeTab === "backtests" && <BacktestsTab data={data} />}
+          {activeTab === "audit" && <AuditTab data={data} />}
         </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-3">
-          <div className="text-gray-500 text-xs">Prompt Tokens</div>
-          <div className="text-white text-lg font-bold">{data.aiCosts.totalPromptTokens.toLocaleString()}</div>
-        </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-3">
-          <div className="text-gray-500 text-xs">Completion Tokens</div>
-          <div className="text-white text-lg font-bold">{data.aiCosts.totalCompletionTokens.toLocaleString()}</div>
-        </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-3">
-          <div className="text-gray-500 text-xs">Avg Latency</div>
-          <div className="text-white text-lg font-bold">{formatNum(data.aiCosts.avgLatencyMs, 0)}ms</div>
-        </div>
-      </div>
-
-      {/* Agent Reports + Proposals */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Section title="🤖 Latest Agent Reports">
-          {data.agentReports.length === 0 ? (
-            <p className="text-gray-500 text-sm">No reports yet.</p>
-          ) : (
-            <div className="space-y-2 max-h-72 overflow-y-auto">
-              {data.agentReports.map((r) => (
-                <div key={r.runId} className="bg-gray-800 rounded p-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>{r.agentId}</span>
-                    <span className={statusColor(r.status)}>{r.status}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-400 text-xs mt-1">
-                    <span>{r.asset} • {r.horizon} • signal: {r.signal ?? "null"}</span>
-                    <span>score: {formatNum(r.score)} • conf: {formatNum(r.confidence)}</span>
-                  </div>
-                  <div className="text-gray-600 text-xs">
-                    {r.promptTokens}T • {r.latencyMs}ms • {formatUsd(r.estimatedCostUsd)}
-                    {" • "}{new Date(r.createdAt).toLocaleTimeString()}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Section>
-
-        <Section title="📈 Latest Proposals">
-          {data.proposals.length === 0 ? (
-            <p className="text-gray-500 text-sm">No proposals yet.</p>
-          ) : (
-            <div className="space-y-2 max-h-72 overflow-y-auto">
-              {data.proposals.map((p) => (
-                <div key={p.runId} className="bg-gray-800 rounded p-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>{p.asset}</span>
-                    <span className={statusColor(p.status)}>{p.status}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-400 text-xs mt-1">
-                    <span>action: {p.action ?? "null"}</span>
-                    <span>conf: {formatNum(p.confidence)}</span>
-                  </div>
-                  {p.decisionGateResult && (
-                    <div className="text-xs text-gray-500">
-                      Decision Gate: {p.decisionGateResult}
-                      {p.suggestedRiskFraction !== null && ` • risk: ${formatNum(p.suggestedRiskFraction * 100, 1)}%`}
-                    </div>
-                  )}
-                  <div className="text-gray-600 text-xs">{new Date(p.createdAt).toLocaleTimeString()}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Section>
-      </div>
-
-      {/* Risk Decisions */}
-      <Section title="🛡️ Latest Risk Decisions">
-        {data.riskDecisions.length === 0 ? (
-          <p className="text-gray-500 text-sm">No decisions yet.</p>
-        ) : (
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {data.riskDecisions.map((d) => (
-              <div key={d.id} className="flex justify-between bg-gray-800 rounded p-2 text-sm">
-                <div>
-                  <span className={statusColor(d.status)}>{d.status}</span>
-                  <span className="text-gray-400 ml-2">{d.ruleCode}</span>
-                </div>
-                <div className="text-gray-400 text-xs">
-                  {d.asset}
-                  {d.positionSize !== null && ` • size: ${formatNum(d.positionSize, 4)}`}
-                  {d.stopLoss !== null && ` • SL: ${formatNum(d.stopLoss, 2)}`}
-                  {" • "}{new Date(d.createdAt).toLocaleTimeString()}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
-
-      {/* Paper Portfolio */}
-      <Section title="🧪 Paper Portfolio">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm mb-4">
-          <div><div className="text-gray-500">Cash</div><div className="text-white font-bold">{formatUsd(data.paperPortfolio.balance)}</div></div>
-          <div><div className="text-gray-500">Total value</div><div className="text-white font-bold">{formatUsd(data.paperPortfolio.totalValue)}</div></div>
-          <div><div className="text-gray-500">Exposure</div><div className="text-white font-bold">{formatUsd(data.paperPortfolio.totalExposure)}</div></div>
-          <div><div className="text-gray-500">Daily P&amp;L</div><div className={data.paperPortfolio.dailyPnl >= 0 ? "text-green-400 font-bold" : "text-red-400 font-bold"}>{formatUsd(data.paperPortfolio.dailyPnl)}</div></div>
-          <div><div className="text-gray-500">Peak value</div><div className="text-white font-bold">{formatUsd(data.paperPortfolio.peakValue)}</div></div>
-        </div>
-        {data.paperPortfolio.positions.length === 0 ? (
-          <p className="text-gray-500 text-sm">No open paper positions.</p>
-        ) : (
-          <div className="space-y-2">
-            {data.paperPortfolio.positions.map((position) => (
-              <div key={`${position.asset}-${position.side}`} className="grid grid-cols-2 md:grid-cols-6 gap-2 bg-gray-800 rounded p-2 text-xs">
-                <span className="text-white font-bold">{position.asset} {position.side}</span>
-                <span>Qty: {formatNum(position.quantity, 6)}</span>
-                <span>Entry: {formatNum(position.entryPrice, 2)}</span>
-                <span>Mark: {formatNum(position.currentPrice, 2)}</span>
-                <span className={position.unrealizedPnl >= 0 ? "text-green-400" : "text-red-400"}>P&amp;L: {formatUsd(position.unrealizedPnl)}</span>
-                <span>{position.stopLoss === null ? "SL: n/a" : `SL: ${formatNum(position.stopLoss, 2)}`}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
-
-      {/* Backtesting */}
-      <Section title="📐 Latest Backtests">
-        {data.backtestRuns.length === 0 ? (
-          <p className="text-gray-500 text-sm">No backtest runs yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {data.backtestRuns.map((run) => (
-              <div key={run.id} className="grid grid-cols-2 md:grid-cols-8 gap-2 bg-gray-800 rounded p-2 text-xs">
-                <span className="text-white font-bold">{run.strategy}</span>
-                <span>{run.asset}</span>
-                <span className={run.totalReturn >= 0 ? "text-green-400" : "text-red-400"}>Return: {formatNum(run.totalReturn)}%</span>
-                <span className="text-yellow-400">DD: {formatNum(run.maxDrawdown)}%</span>
-                <span>Sharpe: {run.sharpeRatio === null ? "n/a" : formatNum(run.sharpeRatio)}</span>
-                <span>Trades: {run.totalTrades}</span>
-                <span>Final: {formatUsd(run.finalQuote)}</span>
-                <span>AI: {formatUsd(run.aiCostUsd)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
-
-      {/* Risk Config */}
-      {data.riskConfig && (
-        <Section title="⚙️ Risk Configuration">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="text-gray-500">Max Portfolio Exposure:</span>
-              <span className="text-white ml-2 font-bold">{data.riskConfig.maxPortfolioExposurePercent}%</span>
-            </div>
-            <div>
-              <span className="text-gray-500">Max Asset Exposure:</span>
-              <span className="text-white ml-2 font-bold">{data.riskConfig.maxAssetExposurePercent}%</span>
-            </div>
-            <div>
-              <span className="text-gray-500">Max Daily Loss:</span>
-              <span className="text-white ml-2 font-bold">{data.riskConfig.maxDailyLossPercent}%</span>
-            </div>
-            <div>
-              <span className="text-gray-500">Max Drawdown:</span>
-              <span className="text-white ml-2 font-bold">{data.riskConfig.maxDrawdownPercent}%</span>
-            </div>
-          </div>
-        </Section>
-      )}
-
-      {/* Audit Log */}
-      <Section title="📋 Audit Log (last 50 events)">
-        <div className="space-y-1 max-h-48 overflow-y-auto text-xs font-mono">
-          {data.auditLog.map((e) => (
-            <div key={e.id} className="flex gap-3">
-              <span className={statusColor(e.level)}>{e.level.padEnd(8)}</span>
-              <span className="text-gray-500 w-20">{e.type}</span>
-              <span className="text-gray-400 flex-1">{e.message}</span>
-              <span className="text-gray-600">{new Date(e.createdAt).toLocaleString()}</span>
-            </div>
-          ))}
-        </div>
-      </Section>
+      </main>
     </div>
   );
 }

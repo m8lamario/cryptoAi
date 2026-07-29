@@ -4,7 +4,7 @@ import { z } from "zod";
 
 /** Options for a single model call */
 export interface ModelCallOptions {
-  /** Model identifier (e.g., "deepseek/deepseek-v4-pro") */
+  /** Model identifier (e.g., "deepseek/deepseek-v4-flash") */
   model: string;
   /** Maximum output tokens */
   maxTokens?: number;

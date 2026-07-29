@@ -50,7 +50,7 @@ export function createAnalyticsRouter(): Router {
   });
 
   /**
-   * GET /analytics/model-performance?model=deepseek/deepseek-v4-pro&days=7
+   * GET /analytics/model-performance?model=deepseek/deepseek-v4-flash&days=7
    * Returns performance metrics per model.
    */
   router.get("/model-performance", async (req, res) => {
