@@ -5,9 +5,6 @@ import { AIGateway, OpenRouterProvider } from "@cryptoai/ai-gateway";
 import {
   TechnicalAgent,
   MacroAgent,
-  NewsAgent,
-  SentimentAgent,
-  WhaleAgent,
   ManagerAgent,
   AgentOrchestrator,
 } from "@cryptoai/agents";
@@ -26,7 +23,6 @@ import {
   evaluateTradeProposal,
 } from "@cryptoai/risk-engine";
 import type {
-  TradeProposal,
   DecisionGateReport,
   DecisionGateConfig,
   RiskProfileConfig,
@@ -36,7 +32,6 @@ import type {
 import {
   initPaperBalance,
   executePaperBuy,
-  executePaperSell,
   markToMarket,
   getPaperPortfolio,
 } from "@cryptoai/paper-executor";
