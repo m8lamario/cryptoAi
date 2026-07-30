@@ -90,7 +90,7 @@ export class WhaleAgent extends BaseAgent {
       agentId: config.agentId ?? "whale-agent",
       agentVersion: config.agentVersion ?? "1.0.0",
       promptVersion: config.promptVersion ?? "1.0.0",
-      model: config.model ?? "deepseek/deepseek-v4-flash",
+      model: config.model,
       temperature: config.temperature ?? 0.2,
       maxTokens: config.maxTokens ?? 1500,
       reasoning: config.reasoning ?? "high",
@@ -120,4 +120,3 @@ export class WhaleAgent extends BaseAgent {
     }
   }
 }
-

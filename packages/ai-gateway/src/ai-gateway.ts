@@ -288,16 +288,63 @@ function extractJson(content: string): string {
   // Try to find JSON in ```json ... ``` blocks first
   const jsonBlock = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (jsonBlock?.[1]) {
-    return jsonBlock[1].trim();
+    const inner = jsonBlock[1].trim();
+    // Also try balanced extraction inside the code block
+    const balanced = extractBalancedJson(inner);
+    if (balanced) return balanced;
+    return inner;
   }
 
-  // Try to find a JSON object anywhere in the content
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  if (jsonMatch?.[0]) {
-    return jsonMatch[0];
+  // Try balanced brace extraction from the raw content
+  const balanced = extractBalancedJson(content);
+  if (balanced) return balanced;
+
+  // Fallback: find first { and last } (non-greedy version)
+  const firstBrace = content.indexOf("{");
+  const lastBrace = content.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    return content.slice(firstBrace, lastBrace + 1).trim();
   }
 
-  // Return raw content as fallback
   return content.trim();
 }
 
+/**
+ * Extract the first balanced JSON object from a string.
+ * Returns null if no balanced object is found.
+ */
+function extractBalancedJson(content: string): string | null {
+  const startIdx = content.indexOf("{");
+  if (startIdx === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = startIdx; i < content.length; i++) {
+    const ch = content[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\" && inString) {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"' && !escaped) {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        return content.slice(startIdx, i + 1).trim();
+      }
+    }
+  }
+
+  return null;
+}

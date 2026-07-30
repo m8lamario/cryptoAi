@@ -58,58 +58,45 @@ export interface TradeProposalInput {
  * Uses upsert on runId for idempotency.
  */
 export async function storeAgentReport(report: AgentReportInput): Promise<void> {
-  const jsonReasoning = JSON.stringify(report.reasoning);
-  const jsonSupporting = JSON.stringify(report.supportingEvidence);
-  const jsonOpposing = JSON.stringify(report.opposingEvidence);
-
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO "StoredAgentReport" (
-      "runId", "agentId", "agentVersion", "promptVersion",
-      "requestedModel", "actualModel", "asset", "horizon", "signal",
-      "score", "confidence", "dataQuality",
-      "reasoning", "supportingEvidence", "opposingEvidence",
-      "sourceIds", "promptTokens", "completionTokens",
-      "latencyMs", "estimatedCostUsd", "status"
-    ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9,
-      $10, $11, $12,
-      $13::jsonb, $14::jsonb, $15::jsonb,
-      $16::text[], $17, $18, $19, $20, $21
-    )
-    ON CONFLICT ("runId") DO UPDATE SET
-      "actualModel" = EXCLUDED."actualModel",
-      "score" = EXCLUDED."score",
-      "confidence" = EXCLUDED."confidence",
-      "dataQuality" = EXCLUDED."dataQuality",
-      "reasoning" = EXCLUDED."reasoning",
-      "signal" = EXCLUDED."signal",
-      "status" = EXCLUDED."status",
-      "promptTokens" = EXCLUDED."promptTokens",
-      "completionTokens" = EXCLUDED."completionTokens",
-      "latencyMs" = EXCLUDED."latencyMs",
-      "estimatedCostUsd" = EXCLUDED."estimatedCostUsd"`,
-    report.runId,
-    report.agentId,
-    report.agentVersion,
-    report.promptVersion,
-    report.requestedModel,
-    report.actualModel,
-    report.asset,
-    report.horizon,
-    report.signal,
-    report.score,
-    report.confidence,
-    report.dataQuality,
-    jsonReasoning,
-    jsonSupporting,
-    jsonOpposing,
-    report.sourceIds,
-    report.promptTokens,
-    report.completionTokens,
-    report.latencyMs,
-    report.estimatedCostUsd,
-    report.status,
-  );
+  await prisma.storedAgentReport.upsert({
+    where: { runId: report.runId },
+    create: {
+      runId: report.runId,
+      agentId: report.agentId,
+      agentVersion: report.agentVersion,
+      promptVersion: report.promptVersion,
+      requestedModel: report.requestedModel,
+      actualModel: report.actualModel,
+      asset: report.asset,
+      horizon: report.horizon,
+      signal: report.signal,
+      score: report.score,
+      confidence: report.confidence,
+      dataQuality: report.dataQuality,
+      reasoning: report.reasoning,
+      supportingEvidence: report.supportingEvidence,
+      opposingEvidence: report.opposingEvidence,
+      sourceIds: report.sourceIds,
+      promptTokens: report.promptTokens,
+      completionTokens: report.completionTokens,
+      latencyMs: report.latencyMs,
+      estimatedCostUsd: report.estimatedCostUsd,
+      status: report.status,
+    },
+    update: {
+      actualModel: report.actualModel,
+      score: report.score,
+      confidence: report.confidence,
+      dataQuality: report.dataQuality,
+      reasoning: report.reasoning,
+      signal: report.signal,
+      status: report.status,
+      promptTokens: report.promptTokens,
+      completionTokens: report.completionTokens,
+      latencyMs: report.latencyMs,
+      estimatedCostUsd: report.estimatedCostUsd,
+    },
+  });
 }
 
 /**
@@ -117,50 +104,38 @@ export async function storeAgentReport(report: AgentReportInput): Promise<void> 
  * Uses upsert on runId for idempotency.
  */
 export async function storeTradeProposal(proposal: TradeProposalInput): Promise<void> {
-  const jsonRationale = JSON.stringify(proposal.rationale);
-
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO "StoredTradeProposal" (
-      "runId", "asset", "action", "confidence", "suggestedRiskFraction",
-      "rationale", "reportIds", "invalidationConditions",
-      "expiresAt", "status", "decisionGateResult", "riskDecisionId",
-      "managerAgentVersion", "managerPromptVersion",
-      "requestedModel", "actualModel",
-      "promptTokens", "completionTokens", "latencyMs", "estimatedCostUsd"
-    ) VALUES (
-      $1, $2, $3, $4, $5,
-      $6::jsonb, $7::text[], $8::jsonb,
-      $9, $10, $11, $12,
-      $13, $14, $15, $16,
-      $17, $18, $19, $20
-    )
-    ON CONFLICT ("runId") DO UPDATE SET
-      "action" = EXCLUDED."action",
-      "confidence" = EXCLUDED."confidence",
-      "suggestedRiskFraction" = EXCLUDED."suggestedRiskFraction",
-      "status" = EXCLUDED."status",
-      "decisionGateResult" = EXCLUDED."decisionGateResult",
-      "riskDecisionId" = EXCLUDED."riskDecisionId",
-      "actualModel" = EXCLUDED."actualModel"`,
-    proposal.runId,
-    proposal.asset,
-    proposal.action,
-    proposal.confidence,
-    proposal.suggestedRiskFraction,
-    jsonRationale,
-    proposal.reportIds,
-    JSON.stringify(proposal.invalidationConditions),
-    proposal.expiresAt,
-    proposal.status,
-    proposal.decisionGateResult ?? null,
-    proposal.riskDecisionId ?? null,
-    proposal.managerAgentVersion,
-    proposal.managerPromptVersion,
-    proposal.requestedModel,
-    proposal.actualModel,
-    proposal.promptTokens,
-    proposal.completionTokens,
-    proposal.latencyMs,
-    proposal.estimatedCostUsd,
-  );
+  await prisma.storedTradeProposal.upsert({
+    where: { runId: proposal.runId },
+    create: {
+      runId: proposal.runId,
+      asset: proposal.asset,
+      action: proposal.action,
+      confidence: proposal.confidence,
+      suggestedRiskFraction: proposal.suggestedRiskFraction,
+      rationale: proposal.rationale,
+      reportIds: proposal.reportIds,
+      invalidationConditions: proposal.invalidationConditions,
+      expiresAt: proposal.expiresAt,
+      status: proposal.status,
+      decisionGateResult: proposal.decisionGateResult ?? null,
+      riskDecisionId: proposal.riskDecisionId ?? null,
+      managerAgentVersion: proposal.managerAgentVersion,
+      managerPromptVersion: proposal.managerPromptVersion,
+      requestedModel: proposal.requestedModel,
+      actualModel: proposal.actualModel,
+      promptTokens: proposal.promptTokens,
+      completionTokens: proposal.completionTokens,
+      latencyMs: proposal.latencyMs,
+      estimatedCostUsd: proposal.estimatedCostUsd,
+    },
+    update: {
+      action: proposal.action,
+      confidence: proposal.confidence,
+      suggestedRiskFraction: proposal.suggestedRiskFraction,
+      status: proposal.status,
+      decisionGateResult: proposal.decisionGateResult ?? null,
+      riskDecisionId: proposal.riskDecisionId ?? null,
+      actualModel: proposal.actualModel,
+    },
+  });
 }

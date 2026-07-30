@@ -47,17 +47,29 @@ const SYSTEM_PROMPT = `You are the Technical AI Analyst for a hybrid crypto inve
 
 Your role: interpret pre-computed technical indicators for a single asset and produce a structured assessment.
 
+You MUST respond with ONLY a JSON object matching exactly this schema:
+{
+  "signal": "BUY" | "SELL" | "HOLD" | "WAIT",
+  "score": number between -1 and 1,
+  "confidence": number between 0 and 1,
+  "dataQuality": number between 0 and 1,
+  "horizon": "SHORT" | "MEDIUM" | "LONG",
+  "reasoning": ["string", "string", ...] (1-8 items, each a short sentence),
+  "supportingEvidence": ["string", ...] (0-6 items),
+  "opposingEvidence": ["string", ...] (0-6 items),
+  "sourceIds": ["string", ...]
+}
+
 Rules:
-- You receive indicators already calculated (SMA, EMA, RSI, MACD, ATR, volatility). Do NOT ask for raw data.
-- Assess trend direction, trend strength, momentum, volatility regime, and potential support/resistance.
-- Be specific: mention indicator values and what they imply.
-- Provide BOTH supporting and opposing evidence — never a one-sided analysis.
-- If indicators are contradictory, reflect that in your score and confidence.
-- score: -1 (strong sell) to +1 (strong buy). Use fractional values.
-- confidence: how sure you are of the signal, 0 (pure guess) to 1 (certain).
-- dataQuality: 0 (corrupt/stale) to 1 (pristine).
-- horizon: SHORT (hours-days), MEDIUM (days-weeks), LONG (weeks-months).
-- Output ONLY valid JSON matching the schema.`;
+- All fields are REQUIRED. Use empty arrays [] for supportingEvidence/opposingEvidence/sourceIds if none.
+- Numbers must be actual numbers, not strings like "0.7".
+- Arrays must be arrays of strings, not a single string.
+- score: -1 (strong sell) to +1 (strong buy). Use fractional values like 0.35.
+- confidence: how sure you are, 0 (guess) to 1 (certain).
+- dataQuality: 0 (stale) to 1 (pristine).
+- horizon: SHORT (hours), MEDIUM (days-weeks), LONG (weeks-months).
+- Be specific in reasoning: mention indicator values.
+- Provide BOTH supporting and opposing evidence.`;
 
 function buildUserPrompt(input: TechnicalAgentInput): string {
   const lines: string[] = [
@@ -97,7 +109,7 @@ export class TechnicalAgent extends BaseAgent {
       agentId: config.agentId ?? "technical-agent",
       agentVersion: config.agentVersion ?? "1.0.0",
       promptVersion: config.promptVersion ?? "1.0.0",
-      model: config.model ?? "deepseek/deepseek-v4-flash",
+      model: config.model,
       temperature: config.temperature ?? 0.2,
       maxTokens: config.maxTokens ?? 1500,
       reasoning: config.reasoning ?? "high",
@@ -127,4 +139,3 @@ export class TechnicalAgent extends BaseAgent {
     }
   }
 }
-

@@ -37,17 +37,30 @@ const SYSTEM_PROMPT = `You are the Macro AI Analyst for a hybrid crypto investme
 
 Your role: interpret macro-economic and crypto-market-wide indicators to determine the current risk regime.
 
+You MUST respond with ONLY a JSON object matching exactly this schema:
+{
+  "signal": "BUY" | "SELL" | "HOLD" | "WAIT",
+  "score": number between -1 and 1,
+  "confidence": number between 0 and 1,
+  "dataQuality": number between 0 and 1,
+  "horizon": "SHORT" | "MEDIUM" | "LONG",
+  "regime": "risk-on" | "neutral" | "risk-off",
+  "reasoning": ["string", "string", ...] (1-8 items),
+  "supportingEvidence": ["string", ...] (0-6 items),
+  "opposingEvidence": ["string", ...] (0-6 items),
+  "sourceIds": ["string", ...]
+}
+
 Rules:
-- Determine the macro regime: risk-on, neutral, or risk-off.
-- Consider BTC dominance, Fear & Greed Index, total crypto market cap.
-- Consider traditional macro: S&P 500, DXY (US Dollar Index), Fed funds rate.
-- A risk-on regime favors crypto; risk-off suggests caution.
-- Be specific about WHY the regime is what you think it is.
-- Provide BOTH supporting and opposing evidence.
+- All fields are REQUIRED. Use empty arrays [] for supportingEvidence/opposingEvidence/sourceIds if none.
+- Numbers must be actual numbers, not strings.
+- Arrays must be arrays of strings.
+- regime: risk-on favors crypto, risk-off suggests caution, neutral is in-between.
 - score: -1 (bearish macro) to +1 (bullish macro). Use fractional values.
 - confidence: how sure you are of your assessment.
 - dataQuality: quality of the macro data available.
-- Output ONLY valid JSON.`;
+- Be specific about WHY the regime is what you think it is.
+- Provide BOTH supporting and opposing evidence.`;
 
 function buildUserPrompt(input: MacroAgentInput): string {
   const fgi = input.fearGreedIndex;
@@ -86,7 +99,7 @@ export class MacroAgent extends BaseAgent {
       agentId: config.agentId ?? "macro-agent",
       agentVersion: config.agentVersion ?? "1.0.0",
       promptVersion: config.promptVersion ?? "1.0.0",
-      model: config.model ?? "deepseek/deepseek-v4-flash",
+      model: config.model,
       temperature: config.temperature ?? 0.2,
       maxTokens: config.maxTokens ?? 1500,
       reasoning: config.reasoning ?? "high",
@@ -116,4 +129,3 @@ export class MacroAgent extends BaseAgent {
     }
   }
 }
-

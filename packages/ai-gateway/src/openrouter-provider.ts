@@ -226,4 +226,3 @@ export class OpenRouterProvider implements AIProvider {
     return Math.round((inputCost + outputCost) * 1_000_000) / 1_000_000; // round to 6 decimals
   }
 }
-

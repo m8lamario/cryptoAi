@@ -7,7 +7,7 @@ export interface BaseAgentConfig {
   agentId: string;
   agentVersion: string;
   promptVersion: string;
-  model: string;
+  model?: string;
   temperature?: number;
   maxTokens?: number;
   reasoning?: "low" | "medium" | "high" | "xhigh";
@@ -37,12 +37,12 @@ export abstract class BaseAgent {
     this.agentId = config.agentId;
     this.agentVersion = config.agentVersion;
     this.promptVersion = config.promptVersion;
-    this.model = config.model;
+    this.model = config.model ?? "gateway-default";
     this.callOptions = {
-      model: config.model,
+      ...(config.model ? { model: config.model } : {}),
       temperature: config.temperature ?? 0.3,
       maxTokens: config.maxTokens ?? 1500,
-      reasoning: config.reasoning ?? "high",
+      ...(config.reasoning ? { reasoning: config.reasoning } : {}),
     };
   }
 
@@ -71,7 +71,7 @@ export abstract class BaseAgent {
         this.agentId,
         this.agentVersion,
         this.promptVersion,
-        this.model,
+        response.requestedModel,
         context.symbol,
         response.error?.message ?? "AI Gateway unavailable",
       );
@@ -82,7 +82,7 @@ export abstract class BaseAgent {
         this.agentId,
         this.agentVersion,
         this.promptVersion,
-        this.model,
+        response.requestedModel,
         context.symbol,
         response.error?.message ?? "Invalid output from AI model",
       );
@@ -119,4 +119,3 @@ export abstract class BaseAgent {
     };
   }
 }
-

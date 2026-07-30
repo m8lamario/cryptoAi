@@ -42,7 +42,26 @@ Rules:
 - suggestedRiskFraction should reflect your overall conviction: 0.01 (1%) for low conviction, up to 0.05 (5%) for very high conviction. Only for BUY/SELL.
 - Provide clear rationale referencing SPECIFIC agent reports and their findings.
 - Provide invalidationConditions: what would make this proposal invalid (e.g., "BTC drops below $62K", "RSI crosses above 70").
-- Output ONLY valid JSON matching the schema.`;
+
+Output ONLY this JSON schema (no markdown, no extra text):
+{
+  "action": "BUY" | "SELL" | "HOLD" | "WAIT" | null,
+  "confidence": 0.5,
+  "suggestedRiskFraction": 0.02,
+  "rationale": ["reason 1", "reason 2"],
+  "invalidationConditions": ["condition 1"],
+  "isAmbiguous": false,
+  "ambiguityReason": null
+}
+
+Field constraints:
+- action: one of "BUY", "SELL", "HOLD", "WAIT", or null
+- confidence: number 0.0 to 1.0 (REQUIRED, always include)
+- suggestedRiskFraction: number 0.0 to 1.0, or null if not BUY/SELL
+- rationale: array of strings, at least 1, max 10 (REQUIRED)
+- invalidationConditions: array of strings, max 6 (REQUIRED, can be empty array [])
+- isAmbiguous: boolean (REQUIRED)
+- ambiguityReason: string or null (REQUIRED, set to null if not ambiguous)`;
 
 function buildUserPrompt(input: ManagerAgentInput): string {
   const lines: string[] = [
@@ -127,7 +146,7 @@ export class ManagerAgent extends BaseAgent {
       agentId: config.agentId ?? "manager-agent",
       agentVersion: config.agentVersion ?? "1.0.0",
       promptVersion: config.promptVersion ?? "1.0.0",
-      model: config.model ?? "deepseek/deepseek-v4-flash",
+      model: config.model,
       temperature: config.temperature ?? 0.2,
       maxTokens: config.maxTokens ?? 2000,
       reasoning: config.reasoning ?? "high",
@@ -324,4 +343,3 @@ function unavailableProposal(asset: string, reason: string): TradeProposal {
     expiresAt: null,
   };
 }
-

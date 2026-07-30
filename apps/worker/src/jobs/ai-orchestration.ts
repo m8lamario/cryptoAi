@@ -192,8 +192,8 @@ async function loadAssetData(): Promise<AssetCandles[]> {
         currentPrice: ticker?.price ?? candles[candles.length - 1]?.close ?? 0,
         change24h: ticker?.changePercent24h ?? null,
       });
-    } catch (err) {
-      logger.warn({ err, symbol: asset.symbol }, "Failed to load data for asset");
+    } catch {
+      logger.warn("Failed to load data for asset");
     }
   }
 
@@ -380,8 +380,8 @@ export async function runAIOrchestration(
             estimatedCostUsd: report.usage.estimatedCostUsd,
             status: report.status,
           });
-        } catch (err) {
-          logger.warn({ err, agentId: report.agentId }, "Failed to persist agent report");
+        } catch {
+          logger.warn("Failed to persist agent report");
         }
 
         totalAiCost += report.usage.estimatedCostUsd;
@@ -399,24 +399,44 @@ export async function runAIOrchestration(
           minValidReports: config.decisionGateConfig.minValidReports,
         });
 
-        const managerReport = await manager.run({
+        const managerResult = await manager.runProposal({
           ...assetContext,
           gateway: config.gateway,
           input: { symbol: assetData.symbol, reports: validReports },
         });
 
-        // Build TradeProposal from manager output
-        const proposal: TradeProposal = {
-          status: "VALID",
-          asset: assetData.symbol,
-          action: managerReport.signal as "BUY" | "SELL" | "HOLD" | "WAIT" | null,
-          confidence: managerReport.confidence,
-          rationale: managerReport.reasoning,
-          reportIds: validReports.map((r) => r.runId),
-          suggestedRiskFraction: managerReport.confidence * 0.04,
-          invalidationConditions: [],
-          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
-        };
+        // Use the REAL proposal from the Manager, not a fake one
+        const proposal = managerResult.proposal;
+        const managerReport = managerResult.report;
+
+        // Persist Manager's own AgentReport for audit trail
+        try {
+          await storeAgentReport({
+            runId: managerReport.runId,
+            agentId: managerReport.agentId,
+            agentVersion: managerReport.agentVersion,
+            promptVersion: managerReport.promptVersion,
+            requestedModel: managerReport.requestedModel,
+            actualModel: managerReport.actualModel,
+            asset: managerReport.asset,
+            horizon: managerReport.horizon,
+            signal: managerReport.signal,
+            score: managerReport.score,
+            confidence: managerReport.confidence,
+            dataQuality: managerReport.dataQuality,
+            reasoning: managerReport.reasoning,
+            supportingEvidence: managerReport.supportingEvidence,
+            opposingEvidence: managerReport.opposingEvidence,
+            sourceIds: managerReport.sourceIds,
+            promptTokens: managerReport.usage.promptTokens,
+            completionTokens: managerReport.usage.completionTokens,
+            latencyMs: managerReport.usage.latencyMs,
+            estimatedCostUsd: managerReport.usage.estimatedCostUsd,
+            status: managerReport.status,
+          });
+        } catch {
+          logger.warn("Failed to persist manager agent report");
+        }
 
         // Persist proposal
         try {
@@ -442,7 +462,7 @@ export async function runAIOrchestration(
             latencyMs: managerReport.usage.latencyMs,
             estimatedCostUsd: managerReport.usage.estimatedCostUsd,
           });
-        } catch (err) {
+        } catch {
           logger.warn("Failed to persist trade proposal");
         }
         totalProposals++;
@@ -562,14 +582,14 @@ export async function runAIOrchestration(
                 },
                 "Paper order executed",
               );
-            } catch (err) {
-              logger.warn({ err }, "Failed to execute paper order");
+            } catch {
+              logger.warn("Failed to execute paper order");
             }
           }
         }
       }
-    } catch (err) {
-      logger.error({ err, symbol: assetData.symbol }, "Failed to process asset");
+    } catch {
+      logger.error("Failed to process asset");
     }
   }
 
