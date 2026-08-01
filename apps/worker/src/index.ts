@@ -15,6 +15,10 @@ import {
   createAIOrchestrationQueue,
   createAIOrchestrationWorker,
 } from "./queues/ai-orchestration.js";
+import {
+  createMarketScannerQueue,
+  createMarketScannerWorker,
+} from "./queues/market-scanner.js";
 const config = getServerConfig();
 const healthQueue = createSystemHealthQueue(config.REDIS_URL);
 const healthWorker = createSystemHealthWorker(config.REDIS_URL);
@@ -22,6 +26,8 @@ const marketDataQueue = createMarketDataQueue(config.REDIS_URL);
 const marketDataWorker = createMarketDataWorker(config.REDIS_URL);
 const aiQueue = createAIOrchestrationQueue(config.REDIS_URL);
 const aiWorker = createAIOrchestrationWorker(config.REDIS_URL);
+const scannerQueue = createMarketScannerQueue(config.REDIS_URL);
+const scannerWorker = createMarketScannerWorker(config.REDIS_URL);
 // Schedule market data collection every 15 minutes
 await marketDataQueue.add(
   "scheduled-collection",
@@ -33,18 +39,20 @@ await marketDataQueue.add(
     jobId: "market-data-scheduled",
   },
 );
-// Schedule AI orchestration every hour at :05 (give market data 5 min to settle)
-await aiQueue.add(
-  "scheduled-ai-cycle",
+// Market scanner runs every 60 seconds — event-driven AI trigger (v1.4)
+await scannerQueue.add(
+  "scheduled-scanner",
   {},
   {
     repeat: {
-      pattern: "5 * * * *",
+      pattern: "* * * * *",
     },
-    jobId: "ai-cycle-scheduled",
+    jobId: "market-scanner-scheduled",
   },
 );
-logger.info("Worker started — market data every 15m, AI cycle hourly at :05");
+logger.info(
+  "Worker started — market data every 15m, market scanner every 60s (AI triggered on demand)",
+);
 async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, "Received shutdown signal");
   await healthWorker.close();
@@ -53,6 +61,8 @@ async function shutdown(signal: string): Promise<void> {
   await marketDataQueue.close();
   await aiWorker.close();
   await aiQueue.close();
+  await scannerWorker.close();
+  await scannerQueue.close();
   logger.info("Worker shut down gracefully");
   process.exit(0);
 }

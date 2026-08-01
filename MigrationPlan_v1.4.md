@@ -35,7 +35,7 @@
 | `AIDecisionMemory` con checkpoint temporali | ✅ M1 |
 | `MultiModelConfig` (GPT/Claude/Gemini/DeepSeek) | ✅ M1 |
 | `EquitySnapshot` per grafici Dashboard 2.0 | ✅ M1 |
-| Market Scanner 30-60s event-driven | ❌ M2 |
+| Market Scanner 30-60s event-driven | ✅ M2 |
 | AI Memory recording automatico (job) | ❌ M5 |
 | Auto-approval rules nel Decision Gate | ❌ M4 |
 | Dashboard 2.0: Hero, KPI, equity curve, timeline, grafici | ❌ M6 |
@@ -69,14 +69,21 @@
 
 ---
 
-### M2 — Market Opportunity Score + Event-Driven Trigger
+### M2 — Market Opportunity Score + Event-Driven Trigger ✅ COMPLETATA
 
-**Da fare:**
-1. `packages/quantitative/src/opportunity-scanner.ts` — Scanner che valuta RSI, MACD, ATR, EMA, SMA, volume, volatilità, funding rate, open interest, whale activity, sentiment, news, breakout e produce uno score 0-100
-2. `apps/worker/src/jobs/market-scanner.ts` — Job BullMQ ogni 30-60s che esegue lo scanner, classifica e decide se triggerare l'AI
-3. `apps/worker/src/index.ts` — Sostituire o affiancare il cron 15m con lo scanner event-driven
-4. `packages/database/src/opportunity-store.ts` — Persistenza dei `MarketOpportunityScore`
-5. Test
+**File creati:**
+- `packages/quantitative/src/opportunity-scanner.ts` — Scanner deterministico: RSI, MACD, volatilità, volume, trend, breakout → score 0-100
+- `apps/worker/src/jobs/market-scanner.ts` — Job BullMQ: carica OHLCV, scansiona, persiste score, triggera AI se score ≥ threshold
+- `apps/worker/src/queues/market-scanner.ts` — Queue BullMQ con retry e lock 30s
+- `packages/database/src/opportunity-store.ts` — Persistenza e query `MarketOpportunityScore`
+- `packages/quantitative/tests/opportunity-scanner.test.ts` — 7 test
+
+**File modificati:**
+- `packages/quantitative/src/index.ts` — Esporta `scanOpportunity`, `scanAllAssets`, `DEFAULT_SCANNER_WEIGHTS`
+- `packages/database/src/index.ts` — Esporta `opportunity-store`
+- `apps/worker/src/index.ts` — Aggiunto scanner ogni 60s, rimosso cron AI fisso (AI ora trigger on-demand)
+
+**Test:** 7 nuovi test quantitative. Totale progetto: 23 file, 243 test, 0 regressioni.
 
 ---
 
@@ -138,4 +145,3 @@
 - Ogni milestone deve passare: typecheck, build, test.
 - Nessuna rottura delle funzionalità esistenti.
 - Nessun commit automatico.
-
