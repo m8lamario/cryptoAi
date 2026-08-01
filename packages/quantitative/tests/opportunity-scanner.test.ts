@@ -54,10 +54,10 @@ describe("scanOpportunity", () => {
     expect(result.classification).toBeDefined();
   });
 
-  it("returns all 6 components", () => {
+  it("returns all 9 components (M2)", () => {
     const candles = generateCandles(60, 65000, 0.02);
     const result = scanOpportunity("BTCUSDT", candles);
-    expect(result.components).toHaveLength(6);
+    expect(result.components).toHaveLength(9);
     const names = result.components.map((c) => c.name);
     expect(names).toContain("RSI");
     expect(names).toContain("MACD");
@@ -65,6 +65,9 @@ describe("scanOpportunity", () => {
     expect(names).toContain("Volume");
     expect(names).toContain("Trend");
     expect(names).toContain("Breakout");
+    expect(names).toContain("Funding Rate");
+    expect(names).toContain("Open Interest");
+    expect(names).toContain("Price Change");
   });
 
   it("each component has value 0-100 and weight 0-1", () => {
@@ -78,16 +81,14 @@ describe("scanOpportunity", () => {
     }
   });
 
-  it("classifies correctly for each range", () => {
-    // All scores returned are deterministic for given candles.
-    // We verify that classification matches the score range.
+  it("classifies correctly for each range (M2: 5 tiers)", () => {
     const candles = generateCandles(60, 65000, 0.02);
     const result = scanOpportunity("BTCUSDT", candles);
 
     if (result.score <= 30) expect(result.classification).toBe("IGNORE");
     else if (result.score <= 60) expect(result.classification).toBe("MONITORING");
-    else if (result.score <= 80) expect(result.classification).toBe("AI_ANALYSIS");
-    else expect(result.classification).toBe("MAX_PRIORITY");
+    else if (result.score <= 80) expect(result.classification).toBe("QUANTITATIVE_ANALYSIS");
+    else expect(result.classification).toBe("AI_ANALYSIS");
   });
 
   it("uses custom weights when provided", () => {
@@ -100,6 +101,9 @@ describe("scanOpportunity", () => {
       volume: 0,
       trend: 0,
       breakout: 0,
+      fundingRate: 0,
+      openInterest: 0,
+      priceChange: 0,
     });
     // With RSI at weight 1.0, the score should be different
     expect(resultCustom.score).not.toBe(resultDefault.score);
@@ -118,4 +122,3 @@ describe("scanOpportunity", () => {
     expect(results[1]!.asset).toBe("ETHUSDT");
   });
 });
-

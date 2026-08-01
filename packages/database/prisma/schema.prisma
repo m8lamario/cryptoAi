@@ -81,6 +81,9 @@ model Asset {
   quoteAsset String
   name       String
   active     Boolean  @default(true)
+  isPinned   Boolean  @default(false)
+  isExcluded Boolean  @default(false)
+  maxCapitalUsd Decimal? @db.Decimal(24, 2)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   candles    PriceCandle[]
@@ -364,3 +367,16 @@ model EquitySnapshot {
   @@index([timestamp])
 }
 
+// --- v1.5: Market Scanner Configuration ---
+
+model ScannerConfig {
+  id                     String   @id @default(cuid())
+  maxAssetsToScan        Int      @default(100)
+  maxAssetsForQuant      Int      @default(10)
+  maxAssetsForAI         Int      @default(5)
+  minScoreForAI          Int      @default(60)  // 0-100
+  scannerFrequencyMinutes Int     @default(15)
+  minVolume24hUsd        Decimal  @db.Decimal(20, 2) @default(1000000)
+  minMarketCapUsd        Decimal  @db.Decimal(20, 2) @default(10000000)
+  updatedAt              DateTime @updatedAt
+}

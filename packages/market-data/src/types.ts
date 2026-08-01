@@ -1,13 +1,25 @@
 import { z } from "zod";
+import { assetRegistry, DEFAULT_ASSETS, type AssetInfo } from "./asset-registry.js";
 
-/** Supported trading pairs */
-export const SUPPORTED_ASSETS = [
-  { symbol: "BTCUSDT", baseAsset: "BTC", quoteAsset: "USDT", name: "Bitcoin" },
-  { symbol: "ETHUSDT", baseAsset: "ETH", quoteAsset: "USDT", name: "Ethereum" },
-  { symbol: "SOLUSDT", baseAsset: "SOL", quoteAsset: "USDT", name: "Solana" },
-] as const;
+// Re-export for convenience
+export { assetRegistry, DEFAULT_ASSETS, type AssetInfo };
 
-export const AssetSymbolSchema = z.enum(["BTCUSDT", "ETHUSDT", "SOLUSDT"]);
+// ---------------------------------------------------------------------------
+// Legacy compatibility — SUPPORTED_ASSETS is now backed by the registry
+// ---------------------------------------------------------------------------
+
+/** @deprecated Use `assetRegistry.getActiveAssets()` instead. */
+export const SUPPORTED_ASSETS: readonly AssetInfo[] = (() => {
+  if (!assetRegistry.initialized) assetRegistry.init();
+  return assetRegistry.getActiveAssets() as unknown as readonly AssetInfo[];
+})();
+
+/** Dynamic asset symbol schema — accepts any registered symbol. */
+export const AssetSymbolSchema = z
+  .string()
+  .refine((val) => assetRegistry.has(val), {
+    message: "Unknown or unregistered asset symbol",
+  });
 export type AssetSymbol = z.infer<typeof AssetSymbolSchema>;
 
 export const CandleIntervalSchema = z.string().default("15m");
@@ -76,4 +88,3 @@ export type PriceCandle = z.infer<typeof PriceCandleSchema>;
 /** Data collection run status */
 export const CollectionRunStatusSchema = z.enum(["RUNNING", "COMPLETED", "FAILED"]);
 export type CollectionRunStatus = z.infer<typeof CollectionRunStatusSchema>;
-

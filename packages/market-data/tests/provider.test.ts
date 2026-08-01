@@ -2,21 +2,23 @@ import { describe, it, expect } from "vitest";
 import {
   BinanceProvider,
   MockProvider,
-  SUPPORTED_ASSETS,
   AssetSymbolSchema,
   RawCandleSchema,
   Ticker24hSchema,
 } from "../src/index.js";
 
 describe("AssetSymbolSchema", () => {
-  it("should accept valid asset symbols", () => {
+  it("should accept all 9 default asset symbols", () => {
     expect(AssetSymbolSchema.parse("BTCUSDT")).toBe("BTCUSDT");
     expect(AssetSymbolSchema.parse("ETHUSDT")).toBe("ETHUSDT");
     expect(AssetSymbolSchema.parse("SOLUSDT")).toBe("SOLUSDT");
+    expect(AssetSymbolSchema.parse("BNBUSDT")).toBe("BNBUSDT");
+    expect(AssetSymbolSchema.parse("XRPUSDT")).toBe("XRPUSDT");
+    expect(AssetSymbolSchema.parse("DOGEUSDT")).toBe("DOGEUSDT");
   });
 
-  it("should reject invalid asset symbols", () => {
-    expect(() => AssetSymbolSchema.parse("DOGEUSDT")).toThrow();
+  it("should reject unknown asset symbols", () => {
+    expect(() => AssetSymbolSchema.parse("DOESNOTEXIST")).toThrow();
     expect(() => AssetSymbolSchema.parse("")).toThrow();
     expect(() => AssetSymbolSchema.parse(123)).toThrow();
   });
@@ -99,4 +101,3 @@ describe("BinanceProvider", () => {
     expect(provider.name).toBe("binance");
   });
 });
-

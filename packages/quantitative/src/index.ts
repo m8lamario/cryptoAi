@@ -23,3 +23,17 @@ export type {
   OpportunityScanResult,
   ScannerWeights,
 } from "./opportunity-scanner.js";
+
+export {
+  filterByLiquidity,
+  DEFAULT_LIQUIDITY_FILTER,
+} from "./liquidity-filter.js";
+export type { LiquidityInput, LiquidityFilterConfig } from "./liquidity-filter.js";
+
+export {
+  scoreFundingRate,
+  scoreOpenInterest,
+  scorePriceChange,
+  computePriceChange,
+} from "./advanced-scanner.js";
+export type { AdvancedMetrics } from "./advanced-scanner.js";

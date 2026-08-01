@@ -59,12 +59,50 @@ async function main(): Promise<void> {
         level: "INFO",
         type: "SEED",
         message: "Database seeded successfully",
-        metadata: { seedVersion: 2 },
+        metadata: { seedVersion: 3 },
+      },
+    });
+  }
+
+  // M1: Seed default assets into the DB
+  const defaultAssets = [
+    { symbol: "BTCUSDT", baseAsset: "BTC", quoteAsset: "USDT", name: "Bitcoin" },
+    { symbol: "ETHUSDT", baseAsset: "ETH", quoteAsset: "USDT", name: "Ethereum" },
+    { symbol: "SOLUSDT", baseAsset: "SOL", quoteAsset: "USDT", name: "Solana" },
+    { symbol: "BNBUSDT", baseAsset: "BNB", quoteAsset: "USDT", name: "BNB" },
+    { symbol: "XRPUSDT", baseAsset: "XRP", quoteAsset: "USDT", name: "XRP" },
+    { symbol: "LINKUSDT", baseAsset: "LINK", quoteAsset: "USDT", name: "Chainlink" },
+    { symbol: "SUIUSDT", baseAsset: "SUI", quoteAsset: "USDT", name: "Sui" },
+    { symbol: "AVAXUSDT", baseAsset: "AVAX", quoteAsset: "USDT", name: "Avalanche" },
+    { symbol: "DOGEUSDT", baseAsset: "DOGE", quoteAsset: "USDT", name: "Dogecoin" },
+  ];
+
+  for (const asset of defaultAssets) {
+    await prisma.asset.upsert({
+      where: { symbol: asset.symbol },
+      update: { active: true },
+      create: { ...asset, active: true },
+    });
+  }
+
+  // M1: Seed default scanner config
+  const existingScannerConfig = await prisma.scannerConfig.findFirst();
+  if (!existingScannerConfig) {
+    await prisma.scannerConfig.create({
+      data: {
+        maxAssetsToScan: 100,
+        maxAssetsForQuant: 10,
+        maxAssetsForAI: 5,
+        minScoreForAI: 60,
+        scannerFrequencyMinutes: 15,
+        minVolume24hUsd: 1_000_000,
+        minMarketCapUsd: 10_000_000,
       },
     });
   }
 
   console.log(`Seeded owner user: ${ownerUsername}`);
+  console.log(`Seeded ${defaultAssets.length} default assets`);
 }
 
 main()

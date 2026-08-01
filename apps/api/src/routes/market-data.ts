@@ -97,7 +97,7 @@ export function createMarketDataRouter(): Router {
       const symbolResult = AssetSymbolSchema.safeParse(req.query.symbol);
       if (!symbolResult.success) {
         res.status(400).json({
-          error: "Invalid symbol. Must be BTCUSDT, ETHUSDT, or SOLUSDT.",
+          error: "Invalid symbol. Must be a registered trading pair (e.g. BTCUSDT, ETHUSDT).",
         });
         return;
       }

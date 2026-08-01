@@ -1,5 +1,5 @@
 import type { MarketDataProvider } from "./provider.js";
-import type { RawCandle, Ticker24h, AssetSymbol } from "./types.js";
+import type { RawCandle, Ticker24h } from "./types.js";
 
 const BINANCE_BASE_URL = "https://api.binance.com";
 
@@ -16,7 +16,7 @@ export class BinanceProvider implements MarketDataProvider {
   }
 
   async getCandles(params: {
-    symbol: AssetSymbol;
+    symbol: string;
     interval: string;
     limit?: number;
   }): Promise<RawCandle[]> {
@@ -66,7 +66,7 @@ export class BinanceProvider implements MarketDataProvider {
     });
   }
 
-  async getTickers(symbols: AssetSymbol[]): Promise<Ticker24h[]> {
+  async getTickers(symbols: string[]): Promise<Ticker24h[]> {
     const symbolList = JSON.stringify(symbols);
     const url = `${this.baseUrl}/api/v3/ticker/24hr?symbols=${encodeURIComponent(symbolList)}`;
 
@@ -96,4 +96,3 @@ export class BinanceProvider implements MarketDataProvider {
     }));
   }
 }
-

@@ -1,5 +1,5 @@
-import type { MarketDataProvider, AssetSymbol } from "@cryptoai/market-data";
-import { BinanceProvider, SUPPORTED_ASSETS } from "@cryptoai/market-data";
+import type { MarketDataProvider } from "@cryptoai/market-data";
+import { BinanceProvider, assetRegistry } from "@cryptoai/market-data";
 import type { Job } from "bullmq";
 import { prisma } from "@cryptoai/database";
 import { logger } from "../logger.js";
@@ -18,13 +18,15 @@ export interface MarketDataCollectionJobResult {
 
 /**
  * Main market data collection handler.
+ * M1: uses the dynamic asset registry instead of the old hardcoded SUPPORTED_ASSETS.
  */
 export async function collectMarketData(
   job: Job<MarketDataCollectionJobData, MarketDataCollectionJobResult>,
 ): Promise<MarketDataCollectionJobResult> {
   void job;
   const provider: MarketDataProvider = new BinanceProvider();
-  const symbols = SUPPORTED_ASSETS.map((a) => a.symbol);
+  const assets = assetRegistry.getActiveAssets();
+  const symbols = assets.map((a) => a.symbol);
 
   // Create collection run record
   const run = await prisma.dataCollectionRun.create({
@@ -39,7 +41,7 @@ export async function collectMarketData(
 
   try {
     // Ensure all assets exist in the database
-    for (const asset of SUPPORTED_ASSETS) {
+    for (const asset of assets) {
       await prisma.asset.upsert({
         where: { symbol: asset.symbol },
         update: { active: true },
@@ -53,51 +55,55 @@ export async function collectMarketData(
       });
     }
 
-    // Fetch 24h tickers for snapshots
-    const tickers = await provider.getTickers(symbols);
+    // Fetch 24h tickers for snapshots — Binance supports max 100 symbols per call.
+    // Batch if needed for large asset lists.
+    const batchSize = 100;
+    for (let i = 0; i < symbols.length; i += batchSize) {
+      const batch = symbols.slice(i, i + batchSize);
+      const tickers = await provider.getTickers(batch);
 
-    // Create snapshots
-    for (const ticker of tickers) {
-      const asset = await prisma.asset.findUnique({
-        where: { symbol: ticker.symbol },
-      });
-      if (!asset) continue;
+      for (const ticker of tickers) {
+        const asset = await prisma.asset.findUnique({
+          where: { symbol: ticker.symbol },
+        });
+        if (!asset) continue;
 
-      await prisma.marketSnapshot.upsert({
-        where: {
-          assetId_collectedAt: {
-            assetId: asset.id,
-            collectedAt: new Date(),
+        await prisma.marketSnapshot.upsert({
+          where: {
+            assetId_collectedAt: {
+              assetId: asset.id,
+              collectedAt: new Date(),
+            },
           },
-        },
-        update: {
-          price: ticker.price,
-          change24h: ticker.changePercent24h,
-          volume24h: ticker.volume24h,
-          high24h: ticker.high24h,
-          low24h: ticker.low24h,
-          collectionRunId: run.id,
-        },
-        create: {
-          assetId: asset.id,
-          price: ticker.price,
-          change24h: ticker.changePercent24h,
-          volume24h: ticker.volume24h,
-          high24h: ticker.high24h,
-          low24h: ticker.low24h,
-          collectionRunId: run.id,
-        },
-      });
-      snapshotsInserted++;
+          update: {
+            price: ticker.price,
+            change24h: ticker.changePercent24h,
+            volume24h: ticker.volume24h,
+            high24h: ticker.high24h,
+            low24h: ticker.low24h,
+            collectionRunId: run.id,
+          },
+          create: {
+            assetId: asset.id,
+            price: ticker.price,
+            change24h: ticker.changePercent24h,
+            volume24h: ticker.volume24h,
+            high24h: ticker.high24h,
+            low24h: ticker.low24h,
+            collectionRunId: run.id,
+          },
+        });
+        snapshotsInserted++;
+      }
     }
 
-    // Fetch OHLCV candles for each asset
+    // Fetch OHLCV candles for each asset — sequential to respect rate limits
     for (const symbol of symbols) {
       const asset = await prisma.asset.findUnique({ where: { symbol } });
       if (!asset) continue;
 
       const candles = await provider.getCandles({
-        symbol: symbol as AssetSymbol,
+        symbol,
         interval: "15m",
         limit: 8, // last 2 hours
       });

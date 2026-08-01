@@ -58,7 +58,7 @@ describe('GET /market-data/history', () => {
   it('returns 400 for invalid symbol after authentication', async () => {
     const app = await buildApp();
     const res = await request(app)
-      .get('/market-data/history?symbol=DOGEUSDT')
+      .get('/market-data/history?symbol=DOESNOTEXIST')
       .set('Cookie', await login(app));
     expect(res.status).toBe(400);
   });

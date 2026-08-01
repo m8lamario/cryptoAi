@@ -10,7 +10,7 @@ describe("MarketOpportunityScore", () => {
   const validScore: MarketOpportunityScore = {
     asset: "BTC",
     score: 72,
-    classification: "AI_ANALYSIS",
+    classification: "QUANTITATIVE_ANALYSIS",
     components: [
       { name: "RSI", value: 65, weight: 0.2 },
       { name: "MACD", value: 80, weight: 0.2 },
@@ -69,16 +69,15 @@ describe("classifyOpportunity", () => {
     expect(classifyOpportunity(60)).toBe("MONITORING");
   });
 
-  it("classifies 61-80 as AI_ANALYSIS", () => {
-    expect(classifyOpportunity(61)).toBe("AI_ANALYSIS");
-    expect(classifyOpportunity(70)).toBe("AI_ANALYSIS");
-    expect(classifyOpportunity(80)).toBe("AI_ANALYSIS");
+  it("classifies 61-80 as QUANTITATIVE_ANALYSIS", () => {
+    expect(classifyOpportunity(61)).toBe("QUANTITATIVE_ANALYSIS");
+    expect(classifyOpportunity(70)).toBe("QUANTITATIVE_ANALYSIS");
+    expect(classifyOpportunity(80)).toBe("QUANTITATIVE_ANALYSIS");
   });
 
-  it("classifies 81+ as MAX_PRIORITY", () => {
-    expect(classifyOpportunity(81)).toBe("MAX_PRIORITY");
-    expect(classifyOpportunity(95)).toBe("MAX_PRIORITY");
-    expect(classifyOpportunity(100)).toBe("MAX_PRIORITY");
+  it("classifies 81+ as AI_ANALYSIS", () => {
+    expect(classifyOpportunity(81)).toBe("AI_ANALYSIS");
+    expect(classifyOpportunity(95)).toBe("AI_ANALYSIS");
+    expect(classifyOpportunity(100)).toBe("AI_ANALYSIS");
   });
 });
-

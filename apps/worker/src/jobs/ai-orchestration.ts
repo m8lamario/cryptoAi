@@ -1,6 +1,6 @@
 import type { Job } from "bullmq";
 import { prisma } from "@cryptoai/database";
-import { SUPPORTED_ASSETS, BinanceProvider } from "@cryptoai/market-data";
+import { assetRegistry, BinanceProvider } from "@cryptoai/market-data";
 import { AIGateway, OpenRouterProvider } from "@cryptoai/ai-gateway";
 import {
   TechnicalAgent,
@@ -48,6 +48,8 @@ import {
 export interface AIOrchestrationJobData {
   /** Override model per agent (optional) */
   models?: Partial<Record<string, string>>;
+  /** M3: process a single asset only. When absent, processes all registered assets. */
+  asset?: string;
 }
 
 export interface AIOrchestrationJobResult {
@@ -159,13 +161,14 @@ interface AssetCandles {
 
 async function loadAssetData(): Promise<AssetCandles[]> {
   const provider = new BinanceProvider();
-  const symbols = SUPPORTED_ASSETS.map((a) => a.symbol) as Array<"BTCUSDT" | "ETHUSDT" | "SOLUSDT">;
+  const activeAssets = assetRegistry.getActiveAssets();
+  const symbols = activeAssets.map((a) => a.symbol);
   const tickers = await provider.getTickers(symbols);
   const tickerMap = new Map(tickers.map((t) => [t.symbol, t]));
 
   const results: AssetCandles[] = [];
 
-  for (const asset of SUPPORTED_ASSETS) {
+  for (const asset of activeAssets) {
     try {
       const rawCandles = await provider.getCandles({
         symbol: asset.symbol,
@@ -270,8 +273,16 @@ export async function runAIOrchestration(
     logger.warn("Could not init paper balance (DB may not be ready)");
   }
 
-  // Load market data
-  const assets = await loadAssetData();
+  // Load market data — M3: filter by asset if specified
+  const allAssets = await loadAssetData();
+  const assets = job.data.asset
+    ? allAssets.filter((a) => a.symbol === job.data.asset)
+    : allAssets;
+
+  if (job.data.asset) {
+    logger.info({ asset: job.data.asset, mode: "single-asset" }, "AI orchestration (M3 targeted)");
+  }
+
   if (assets.length === 0) {
     void notify({
       type: "DATA_STALE",

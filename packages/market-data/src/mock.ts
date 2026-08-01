@@ -1,5 +1,5 @@
 import type { MarketDataProvider } from "./provider.js";
-import type { RawCandle, Ticker24h, AssetSymbol } from "./types.js";
+import type { RawCandle, Ticker24h } from "./types.js";
 
 /**
  * Mock market data provider for testing.
@@ -9,16 +9,15 @@ export class MockProvider implements MarketDataProvider {
   readonly name = "mock";
 
   async getCandles(params: {
-    symbol: AssetSymbol;
+    symbol: string;
     interval: string;
     limit?: number;
   }): Promise<RawCandle[]> {
-    const { limit = 10 } = params;
+    const { symbol, limit = 10 } = params;
     const candles: RawCandle[] = [];
     const basePrice =
-      params.symbol === "BTCUSDT" ? 50_000 : params.symbol === "ETHUSDT" ? 3_000 : 100;
+      symbol === "BTCUSDT" ? 50_000 : symbol === "ETHUSDT" ? 3_000 : 100;
 
-    // 15-minute intervals going backwards from now
     const now = Date.now();
     const intervalMs = 15 * 60 * 1000;
 
@@ -46,11 +45,17 @@ export class MockProvider implements MarketDataProvider {
     return candles;
   }
 
-  async getTickers(symbols: AssetSymbol[]): Promise<Ticker24h[]> {
+  async getTickers(symbols: string[]): Promise<Ticker24h[]> {
     const basePrices: Record<string, number> = {
       BTCUSDT: 50_000,
       ETHUSDT: 3_000,
       SOLUSDT: 100,
+      BNBUSDT: 300,
+      XRPUSDT: 0.5,
+      LINKUSDT: 15,
+      SUIUSDT: 2,
+      AVAXUSDT: 35,
+      DOGEUSDT: 0.1,
     };
 
     return symbols.map((symbol) => {
@@ -67,4 +72,3 @@ export class MockProvider implements MarketDataProvider {
     });
   }
 }
-

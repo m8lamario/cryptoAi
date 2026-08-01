@@ -1,8 +1,10 @@
-import type { RawCandle, Ticker24h, AssetSymbol } from "./types.js";
+import type { RawCandle, Ticker24h } from "./types.js";
 
 /**
  * Interface for fetching market data from external providers.
  * All implementations must be deterministic (no AI here).
+ *
+ * M1: `symbol` is now a plain `string` to support the dynamic asset registry.
  */
 export interface MarketDataProvider {
   /** Provider name for logging and audit */
@@ -13,7 +15,7 @@ export interface MarketDataProvider {
    * Returns candles sorted by openTime ascending.
    */
   getCandles(params: {
-    symbol: AssetSymbol;
+    symbol: string;
     interval: string;
     limit?: number;
   }): Promise<RawCandle[]>;
@@ -21,6 +23,5 @@ export interface MarketDataProvider {
   /**
    * Fetch 24h ticker for a list of symbols.
    */
-  getTickers(symbols: AssetSymbol[]): Promise<Ticker24h[]>;
+  getTickers(symbols: string[]): Promise<Ticker24h[]>;
 }
-
