@@ -592,6 +592,13 @@ export async function runAIOrchestration(
               message: "Automatic paper trading is blocked by the kill switch.",
               details: { reason: killSwitch?.reason ?? "Not specified" },
             });
+          } else if (!killSwitchActive && lastKillSwitchActive === true) {
+            void notify({
+              type: "KILL_SWITCH_DEACTIVATED",
+              title: "Kill Switch Deactivated",
+              message: "The kill switch has been deactivated. Trading may resume.",
+              details: { timestamp: new Date().toISOString() },
+            });
           }
           lastKillSwitchActive = killSwitchActive;
 

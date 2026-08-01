@@ -18,7 +18,7 @@
 | Fase 3 (Agenti AI) | ✅ Completa |
 | Fase 4 (Investment Manager) | ✅ Completa |
 | Fase 5 (Memoria e valutazione) | ✅ Completa |
-| Fase 6 (Dashboard e notifiche) | ⚠️ Dashboard ok, Telegram non wired |
+| Fase 6 (Dashboard e notifiche) | ✅ Completa |
 | Fase 7 (Paper trading e backtesting) | ✅ Completa |
 | Fase 8 (Exchange reale) | ❌ Non iniziata |
 
@@ -38,8 +38,8 @@
 | Market Scanner 30-60s event-driven | ✅ M2 |
 | AI Memory recording automatico (job) | ✅ M5 |
 | Auto-approval rules nel Decision Gate | ✅ M4 |
-| Dashboard 2.0: Hero, KPI, equity curve, timeline, grafici | ❌ M6 |
-| Telegram notifications wired | ❌ M7 |
+| Dashboard 2.0: Hero, KPI, equity curve, timeline, grafici | ✅ M6 |
+| Telegram notifications wired | ✅ M7 |
 | Multi-model consensus mode | ✅ M3 |
 
 ---
@@ -136,25 +136,44 @@
 
 ---
 
-### M6 — Dashboard 2.0 (Hero, Charts, Timeline)
+### M6 — Dashboard 2.0 (Hero, Charts, Timeline) ✅ COMPLETATA (pre-esistente)
 
-**Da fare:**
-1. `apps/web/components/Hero.tsx` — Valore portfolio, PnL, stato AI
-2. `apps/web/components/EquityCurve.tsx` — Grafico equity
-3. `apps/web/components/Timeline.tsx` — Cronologia eventi
-4. `apps/web/components/AgentStatusBar.tsx` — 🟢🟡🔴 agenti
-5. `apps/web/components/AiCosts.tsx` — Token e costi
-6. Modificare `apps/web/app/page.tsx` per il layout Dashboard 2.0
-7. Endpoint API per equity history e timeline
-8. Test
+**Stato:** Tutti i componenti Dashboard 2.0 erano già presenti nel codebase prima della migrazione v1.4:
+- `apps/web/components/Hero.tsx` — Valore portfolio, PnL, ROI, max drawdown, win rate, profit factor
+- `apps/web/components/EquityCurve.tsx` — SVG equity curve con min/max labels
+- `apps/web/components/Timeline.tsx` — Cronologia eventi (TRADE_OPEN, TRADE_CLOSE, STOP_LOSS, TAKE_PROFIT, AI_DECISION, NEWS, WHALE, SYSTEM)
+- `apps/web/components/AgentStatusBar.tsx` — 🟢🟡🔴 per 5 agenti
+- `apps/web/components/AiCosts.tsx` — Token, costi giornalieri/mensili, breakdown per agente
+- `apps/web/components/Sidebar.tsx` — Navigazione 8 tab con kill-switch indicator
+- `apps/web/components/PortfolioSummary.tsx` — Posizioni con LONG/SHORT badge
+- `apps/web/app/page.tsx` — Layout Dashboard 2.0 con polling 30s e 8 pannelli
+- `apps/web/app/types.ts` — `DashboardData` che aggrega tutti i tipi contracts
+
+**API:** Endpoint `/api/dashboard-data` già attivo con tutti i dati aggregati.
 
 ---
 
-### M7 — Wire Telegram Notifications
+### M7 — Wire Telegram Notifications ✅ COMPLETATA
 
-**Da fare:**
-1. `apps/worker/src/jobs/ai-orchestration.ts` — Inviare notifiche per: proposta AMBIGUOUS, blocco Risk Manager, trade eseguito, kill switch, budget esaurito, dati scaduti
-2. Test
+**Notifiche ora attive nell'orchestrazione:**
+
+| Evento | Trigger | Job |
+|--------|---------|-----|
+| `OPPORTUNITY_DETECTED` | Scanner score ≥ threshold | `market-scanner.ts` |
+| `SERVICE_UNAVAILABLE` | Scanner failure | `market-scanner.ts` |
+| `DATA_STALE` | Zero asset data, Risk Manager stale | `ai-orchestration.ts` |
+| `AI_BUDGET_EXHAUSTED` | Budget exceeded in agent/manager | `ai-orchestration.ts` |
+| `APPROVAL_REQUIRED` | Manager AMBIGUOUS proposal | `ai-orchestration.ts` |
+| `PROPOSAL_BLOCKED` | Risk Manager BLOCK | `ai-orchestration.ts` |
+| `KILL_SWITCH_ACTIVATED` | Kill switch transition ON | `ai-orchestration.ts` |
+| `KILL_SWITCH_DEACTIVATED` | Kill switch transition OFF | `ai-orchestration.ts` |
+| `INFO` | Trade FILLED (BUY/SELL) | `ai-orchestration.ts` |
+
+**File modificati:**
+- `apps/worker/src/jobs/market-scanner.ts` — Aggiunte notifiche `OPPORTUNITY_DETECTED` e `SERVICE_UNAVAILABLE`
+- `apps/worker/src/jobs/ai-orchestration.ts` — Aggiunta notifica `KILL_SWITCH_DEACTIVATED` (transizione)
+
+**Test:** 0 regressioni, typecheck e test worker passati.
 
 ---
 
