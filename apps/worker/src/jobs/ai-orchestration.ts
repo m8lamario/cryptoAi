@@ -36,8 +36,12 @@ import {
   markToMarket,
   getPaperPortfolio,
 } from "@cryptoai/paper-executor";
-import { storeAgentReport, storeTradeProposal } from "@cryptoai/database";
+import { storeAgentReport, storeTradeProposal, storeDecisionMemory } from "@cryptoai/database";
 import { logger } from "../logger.js";
+import {
+  createConfiguredNotificationSender,
+  isBudgetExhaustedReason,
+} from "../notifications.js";
 
 // --- Job Types ---
 
@@ -228,6 +232,8 @@ function computeIndicators(candles: AssetCandles["candles"]) {
   };
 }
 
+let lastKillSwitchActive: boolean | null = null;
+
 // --- Main Handler ---
 
 export async function runAIOrchestration(
@@ -235,6 +241,8 @@ export async function runAIOrchestration(
 ): Promise<AIOrchestrationJobResult> {
   void job;
   const startTime = Date.now();
+  const notify = createConfiguredNotificationSender();
+  let budgetNotificationSent = false;
   logger.info("Starting AI orchestration cycle");
 
   let config: RunConfig;
@@ -265,6 +273,12 @@ export async function runAIOrchestration(
   // Load market data
   const assets = await loadAssetData();
   if (assets.length === 0) {
+    void notify({
+      type: "DATA_STALE",
+      title: "Market Data Unavailable",
+      message: "No asset data was loaded; the orchestration cycle was skipped.",
+      details: { timestamp: new Date().toISOString() },
+    });
     return {
       status: "failed",
       assetsProcessed: 0,
@@ -346,6 +360,19 @@ export async function runAIOrchestration(
           fedFundsRate: null,
         },
       });
+
+      if (
+        !budgetNotificationSent &&
+        results.some((result) => result.report.reasoning.some(isBudgetExhaustedReason))
+      ) {
+        budgetNotificationSent = true;
+        void notify({
+          type: "AI_BUDGET_EXHAUSTED",
+          title: "AI Budget Exhausted",
+          message: "One or more AI calls were unavailable because the configured budget was exhausted.",
+          details: { asset: assetData.symbol },
+        });
+      }
 
       // Persist agent reports
       const validReports: AgentReport[] = [];
@@ -430,6 +457,16 @@ export async function runAIOrchestration(
         const proposal = managerResult.proposal;
         const managerReport = managerResult.report;
 
+        if (!budgetNotificationSent && managerReport.reasoning.some(isBudgetExhaustedReason)) {
+          budgetNotificationSent = true;
+          void notify({
+            type: "AI_BUDGET_EXHAUSTED",
+            title: "AI Budget Exhausted",
+            message: "The manager proposal was unavailable because the configured budget was exhausted.",
+            details: { asset: assetData.symbol, agent: managerReport.agentId },
+          });
+        }
+
         // Persist Manager's own AgentReport for audit trail
         try {
           await storeAgentReport({
@@ -490,6 +527,19 @@ export async function runAIOrchestration(
 
         totalAiCost += managerReport.usage.estimatedCostUsd;
 
+        if (proposal.status === "AMBIGUOUS") {
+          void notify({
+            type: "APPROVAL_REQUIRED",
+            title: "Ambiguous Proposal Requires Review",
+            message: "The Investment Manager detected conflicting evidence and vetoed automatic action.",
+            details: {
+              asset: proposal.asset,
+              confidence: proposal.confidence,
+              reportCount: proposal.reportIds.length,
+            },
+          });
+        }
+
         // Decision Gate
         const dgReports: DecisionGateReport[] = validReports.map((r) => ({
           status: r.status,
@@ -534,11 +584,22 @@ export async function runAIOrchestration(
             orderBy: { updatedAt: "desc" },
           });
 
+          const killSwitchActive = killSwitch?.active ?? false;
+          if (killSwitchActive && lastKillSwitchActive !== true) {
+            void notify({
+              type: "KILL_SWITCH_ACTIVATED",
+              title: "Kill Switch Activated",
+              message: "Automatic paper trading is blocked by the kill switch.",
+              details: { reason: killSwitch?.reason ?? "Not specified" },
+            });
+          }
+          lastKillSwitchActive = killSwitchActive;
+
           const riskDecision = evaluateTradeProposal(proposal, {
             riskProfile: config.riskProfile,
             portfolio: portfolioSnapshot,
             prices,
-            killSwitchActive: killSwitch?.active ?? false,
+            killSwitchActive,
             minConfidence: config.minConfidence,
             minPositionSize: config.minPositionSize,
             maxDataAgeMs: config.maxDataAgeMs,
@@ -571,6 +632,29 @@ export async function runAIOrchestration(
           }
           totalDecisions++;
 
+          if (riskDecision.status === "BLOCK") {
+            void notify({
+              type: "PROPOSAL_BLOCKED",
+              title: "Proposal Blocked by Risk Manager",
+              message: riskDecision.reason,
+              details: {
+                asset: assetData.symbol,
+                ruleCode: riskDecision.ruleCode,
+                observedValue: riskDecision.observedValue,
+                configuredLimit: riskDecision.configuredLimit,
+              },
+            });
+
+            if (riskDecision.ruleCode === "DATA_TOO_STALE") {
+              void notify({
+                type: "DATA_STALE",
+                title: "Market Data Stale",
+                message: riskDecision.reason,
+                details: { asset: assetData.symbol, observedAgeMs: riskDecision.observedValue },
+              });
+            }
+          }
+
           // Paper Executor — only for APPROVED decisions
           if (riskDecision.status === "APPROVE" && riskDecision.positionSize) {
             try {
@@ -600,20 +684,39 @@ export async function runAIOrchestration(
 
                 if (execResult.status === "FILLED") {
                   totalOrders++;
+                  void notify({
+                    type: "INFO",
+                    title: "Paper Trade Executed",
+                    message: "A paper order was filled after deterministic risk approval.",
+                    details: {
+                      asset: assetData.symbol,
+                      action: "SELL",
+                      quantity: execResult.quantity,
+                      price: execResult.price,
+                      orderId: execResult.orderId,
+                    },
+                  });
+                  // v1.4: Record AI decision for memory tracking
+                  storeDecisionMemory({
+                    proposalRunId: managerReport.runId,
+                    asset: assetData.symbol,
+                    action: "SELL",
+                    strategy: null,
+                    entryPrice: assetData.currentPrice,
+                    indicatorsJson: {
+                      rsi14: indicators.rsi14,
+                      macd: indicators.macd,
+                      macdSignal: indicators.macdSignal,
+                      sma20: indicators.sma20,
+                      sma50: indicators.sma50,
+                      volatility: indicators.volatility,
+                    },
+                    modelUsed: managerReport.actualModel ?? managerReport.requestedModel,
+                    promptVersion: managerReport.promptVersion,
+                    confidenceAtDecision: proposal.confidence,
+                    decidedAt: new Date(),
+                  }).catch(() => { /* best-effort */ });
                 }
-
-                logger.info(
-                  {
-                    symbol: assetData.symbol,
-                    orderId: execResult.orderId,
-                    status: execResult.status,
-                    side: "SELL",
-                    quantity: execResult.quantity,
-                    price: execResult.price,
-                    reason: execResult.reason,
-                  },
-                  "Paper order executed",
-                );
               } else if (action === "BUY") {
                 // Open new position (or add to existing)
                 const execResult = await executePaperBuy(
@@ -632,20 +735,39 @@ export async function runAIOrchestration(
 
                 if (execResult.status === "FILLED") {
                   totalOrders++;
+                  void notify({
+                    type: "INFO",
+                    title: "Paper Trade Executed",
+                    message: "A paper order was filled after deterministic risk approval.",
+                    details: {
+                      asset: assetData.symbol,
+                      action: "BUY",
+                      quantity: execResult.quantity,
+                      price: execResult.price,
+                      orderId: execResult.orderId,
+                    },
+                  });
+                  // v1.4: Record AI decision for memory tracking
+                  storeDecisionMemory({
+                    proposalRunId: managerReport.runId,
+                    asset: assetData.symbol,
+                    action: "BUY",
+                    strategy: null,
+                    entryPrice: assetData.currentPrice,
+                    indicatorsJson: {
+                      rsi14: indicators.rsi14,
+                      macd: indicators.macd,
+                      macdSignal: indicators.macdSignal,
+                      sma20: indicators.sma20,
+                      sma50: indicators.sma50,
+                      volatility: indicators.volatility,
+                    },
+                    modelUsed: managerReport.actualModel ?? managerReport.requestedModel,
+                    promptVersion: managerReport.promptVersion,
+                    confidenceAtDecision: proposal.confidence,
+                    decidedAt: new Date(),
+                  }).catch(() => { /* best-effort */ });
                 }
-
-                logger.info(
-                  {
-                    symbol: assetData.symbol,
-                    orderId: execResult.orderId,
-                    status: execResult.status,
-                    side: "BUY",
-                    quantity: execResult.quantity,
-                    price: execResult.price,
-                    reason: execResult.reason,
-                  },
-                  "Paper order executed",
-                );
               }
             } catch {
               logger.warn("Failed to execute paper order");

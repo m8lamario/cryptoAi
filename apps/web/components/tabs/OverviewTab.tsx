@@ -1,4 +1,3 @@
-import { StatsCard } from "../StatsCard";
 import { Badge } from "../Badge";
 import type { DashboardData } from "../../app/types";
 
@@ -6,43 +5,13 @@ function fmt(n: number, d = 2) { return n.toLocaleString(undefined, { minimumFra
 function fmtUsd(n: number) { return "$" + fmt(n, 6); }
 
 export function OverviewTab({ data }: { data: DashboardData }) {
-  const { systemStatus, aiCosts, paperPortfolio, marketData } = data;
+  const { aiCosts, paperPortfolio } = data;
   const dailyPnlPct = paperPortfolio.totalValue > 0
     ? (paperPortfolio.dailyPnl / (paperPortfolio.totalValue - paperPortfolio.dailyPnl)) * 100
     : 0;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* KPI Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatsCard
-          label="AI Cost"
-          value={fmtUsd(aiCosts.totalCostUsd)}
-          subtitle={`${aiCosts.totalPromptTokens.toLocaleString()} prompt tokens`}
-          icon="⚡"
-        />
-        <StatsCard
-          label="Avg Latency"
-          value={`${fmt(aiCosts.avgLatencyMs, 0)}ms`}
-          subtitle="Per AI call"
-          trend={aiCosts.avgLatencyMs < 3000 ? "up" : "down"}
-          icon="⏱"
-        />
-        <StatsCard
-          label="System Uptime"
-          value={`${Math.floor(systemStatus.uptime / 3600)}h ${Math.floor((systemStatus.uptime % 3600) / 60)}m`}
-          subtitle={new Date(systemStatus.timestamp).toLocaleString()}
-          trend={systemStatus.healthy ? "up" : "down"}
-          icon="🖥"
-        />
-        <StatsCard
-          label="Data Quality"
-          value={marketData.snapshots.length >= 3 ? "Complete" : "Partial"}
-          subtitle={`${marketData.snapshots.length}/${marketData.assetCount} assets`}
-          trend={marketData.snapshots.length >= 3 ? "up" : "down"}
-          icon="📡"
-        />
-      </div>
 
       {/* Portfolio & Exposure */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

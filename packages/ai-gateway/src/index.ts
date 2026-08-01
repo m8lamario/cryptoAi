@@ -7,6 +7,8 @@ export { MockAIProvider } from "./mock-provider.js";
 export { CircuitBreaker } from "./circuit-breaker.js";
 export { BudgetTracker } from "./budget-tracker.js";
 export { AIErrorCategorySchema } from "./types.js";
+export { MultiModelGateway } from "./multi-model.js";
+export type { MultiModelConfig, MultiModelEntry, ConsensusMode } from "./multi-model.js";
 
 export type { OpenRouterConfig } from "./openrouter-provider.js";
 export type {
@@ -23,4 +25,3 @@ export type {
   GatewayCallOptions,
   GatewayResponse,
 } from "./types.js";
-

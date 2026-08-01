@@ -1,3 +1,11 @@
+import type {
+  DashboardAgentStatus,
+  DashboardAiCostSummary,
+  DashboardChartPoint,
+  DashboardKpiResponse,
+  DashboardTimelineEvent,
+} from "@cryptoai/contracts";
+
 export interface DashboardData {
   systemStatus: { healthy: boolean; uptime: number; timestamp: string };
   marketData: {
@@ -31,6 +39,8 @@ export interface DashboardData {
   aiCosts: {
     totalCostUsd: number; totalPromptTokens: number;
     totalCompletionTokens: number; avgLatencyMs: number;
+    budgetRemainingUsd: number | null;
+    byAgent: DashboardAiCostSummary["byAgent"];
   };
   auditLog: Array<{
     id: string; level: string; type: string; message: string; createdAt: string;
@@ -50,5 +60,10 @@ export interface DashboardData {
     sharpeRatio: number | null; sortinoRatio: number | null;
     totalTrades: number; aiCostUsd: number; createdAt: string;
   }>;
+  kpis: DashboardKpiResponse;
+  equityHistory: DashboardChartPoint[];
+  timeline: DashboardTimelineEvent[];
+  agentStatuses: DashboardAgentStatus[];
+  aiCostSummary: DashboardAiCostSummary;
 }
 

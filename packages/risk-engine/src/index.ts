@@ -8,6 +8,25 @@ export { evaluateDecisionGate } from "./decision-gate.js";
 export type { DecisionGateResult, DecisionGateConfig, DecisionGateReport } from "./decision-gate.js";
 
 export {
+  evaluateAutoApproval,
+  DEFAULT_AUTO_APPROVAL_RULES,
+} from "./auto-approval.js";
+export type {
+  AutoApprovalRule,
+  AutoApprovalInput,
+  AutoApprovalResult,
+  OperatingMode,
+} from "./auto-approval.js";
+
+export {
+  initOperatingMode,
+  getOperatingMode,
+  getAutoApprovalRules,
+  setOperatingMode,
+  setAutoApprovalRules,
+} from "./operating-mode.js";
+
+export {
   TradeActionSchema,
   TradeProposalStatusSchema,
   TradeProposalSchema,

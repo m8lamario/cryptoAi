@@ -47,6 +47,44 @@ const authEnvSchema = z.object({
   LOGIN_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).default(900),
 });
 
+const telegramEnvSchema = z.object({
+  TELEGRAM_BOT_TOKEN: z.string().trim().min(1).optional(),
+  TELEGRAM_CHAT_ID: z.string().trim().min(1).optional(),
+  TELEGRAM_DISABLE_NOTIFICATION: z.enum(["true", "false", "1", "0"]).optional(),
+});
+
+export interface TelegramConfig {
+  botToken: string;
+  chatId: string;
+  disableNotification: boolean;
+}
+
+/** Returns Telegram configuration, or null when notifications are not configured. */
+export function getTelegramConfig(): TelegramConfig | null {
+  const result = telegramEnvSchema.safeParse(process.env);
+  if (!result.success) {
+    throw new Error(
+      `Invalid Telegram configuration: ${result.error.issues
+        .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+        .join(", ")}`,
+    );
+  }
+
+  const { TELEGRAM_BOT_TOKEN: botToken, TELEGRAM_CHAT_ID: chatId } = result.data;
+  if (!botToken && !chatId) return null;
+  if (!botToken || !chatId) {
+    throw new Error("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be configured together");
+  }
+
+  return {
+    botToken,
+    chatId,
+    disableNotification:
+      result.data.TELEGRAM_DISABLE_NOTIFICATION === "true" ||
+      result.data.TELEGRAM_DISABLE_NOTIFICATION === "1",
+  };
+}
+
 export interface AuthConfig {
   appOrigin: string;
   apiBaseUrl: string;

@@ -271,3 +271,22 @@ export interface DashboardAgentStatus {
   lastReportAt: string | null;
   modelUsed: string | null;
 }
+
+export interface DashboardAiCostEntry {
+  agentId: string;
+  label: string;
+  calls: number;
+  promptTokens: number;
+  completionTokens: number;
+  costUsd: number;
+  avgLatencyMs: number;
+}
+
+export interface DashboardAiCostSummary {
+  totalCostUsd: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  avgLatencyMs: number;
+  budgetRemainingUsd: number | null;
+  byAgent: DashboardAiCostEntry[];
+}

@@ -2,6 +2,14 @@ import { Router } from "express";
 import { prisma } from "@cryptoai/database";
 import { logger } from "../logger.js";
 import type { Request, Response } from "express";
+import {
+  calculateDashboardKpis,
+  fetchAgentStatuses,
+  fetchAiCostSummary,
+  fetchEquityHistory,
+  fetchTimeline,
+  getPersistedOperatingMode,
+} from "../dashboard-data.js";
 
 export function createDashboardRouter(): Router {
   const router = Router();
@@ -54,26 +62,24 @@ export function createDashboardRouter(): Router {
         0,
       );
 
-      // Compute AI cost totals
-      const [reportAgg, proposalAgg, reportCount, proposalCount] = await Promise.all([
-        prisma.storedAgentReport.aggregate({
-          _sum: { estimatedCostUsd: true, promptTokens: true, completionTokens: true, latencyMs: true },
-        }),
-        prisma.storedTradeProposal.aggregate({
-          _sum: { estimatedCostUsd: true, promptTokens: true, completionTokens: true, latencyMs: true },
-        }),
-        prisma.storedAgentReport.count(),
-        prisma.storedTradeProposal.count(),
+      const historyFrom = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const [equityHistory, timeline, agentStatuses, aiCostSummary, operatingMode] = await Promise.all([
+        fetchEquityHistory(historyFrom, new Date(), "1h"),
+        fetchTimeline(undefined, 30),
+        fetchAgentStatuses(),
+        fetchAiCostSummary(),
+        getPersistedOperatingMode(),
       ]);
-
-      const totalAiCostUsd =
-        Number(reportAgg._sum.estimatedCostUsd ?? 0) +
-        Number(proposalAgg._sum.estimatedCostUsd ?? 0);
-      const totalPromptTokens = (reportAgg._sum.promptTokens ?? 0) + (proposalAgg._sum.promptTokens ?? 0);
-      const totalCompletionTokens = (reportAgg._sum.completionTokens ?? 0) + (proposalAgg._sum.completionTokens ?? 0);
-      const totalCalls = reportCount + proposalCount;
-      const totalLatencyMs =
-        Number(reportAgg._sum.latencyMs ?? 0) + Number(proposalAgg._sum.latencyMs ?? 0);
+      const paperEquity = Number(paperBalance?.quote ?? 0) + paperExposure;
+      const kpis = calculateDashboardKpis({
+        equity: paperEquity,
+        dailyPnl: Number(paperBalance?.dailyPnl ?? 0),
+        history: equityHistory,
+        latestProposal: lastProposals[0]
+          ? { status: lastProposals[0].status, createdAt: lastProposals[0].createdAt }
+          : null,
+        operatingMode,
+      });
 
       res.json({
         systemStatus: {
@@ -154,11 +160,12 @@ export function createDashboardRouter(): Router {
             }
           : null,
         aiCosts: {
-          totalCostUsd: Math.round(totalAiCostUsd * 1_000_000) / 1_000_000,
-          totalPromptTokens: totalPromptTokens,
-          totalCompletionTokens: totalCompletionTokens,
-          avgLatencyMs:
-            Math.round((totalLatencyMs / Math.max(1, totalCalls)) * 100) / 100,
+          totalCostUsd: aiCostSummary.totalCostUsd,
+          totalPromptTokens: aiCostSummary.totalPromptTokens,
+          totalCompletionTokens: aiCostSummary.totalCompletionTokens,
+          avgLatencyMs: aiCostSummary.avgLatencyMs,
+          budgetRemainingUsd: aiCostSummary.budgetRemainingUsd,
+          byAgent: aiCostSummary.byAgent,
         },
         auditLog: systemEvents.map((e) => ({
           id: e.id,
@@ -175,6 +182,11 @@ export function createDashboardRouter(): Router {
           totalValue: Number(paperBalance?.quote ?? 0) + paperExposure,
           positions: paperPositionsResponse,
         },
+        kpis,
+        equityHistory,
+        timeline,
+        agentStatuses,
+        aiCostSummary,
         backtestRuns: latestBacktestRuns.map((run) => ({
           id: run.id,
           strategy: run.strategy,

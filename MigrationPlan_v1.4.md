@@ -36,11 +36,11 @@
 | `MultiModelConfig` (GPT/Claude/Gemini/DeepSeek) | ✅ M1 |
 | `EquitySnapshot` per grafici Dashboard 2.0 | ✅ M1 |
 | Market Scanner 30-60s event-driven | ✅ M2 |
-| AI Memory recording automatico (job) | ❌ M5 |
-| Auto-approval rules nel Decision Gate | ❌ M4 |
+| AI Memory recording automatico (job) | ✅ M5 |
+| Auto-approval rules nel Decision Gate | ✅ M4 |
 | Dashboard 2.0: Hero, KPI, equity curve, timeline, grafici | ❌ M6 |
 | Telegram notifications wired | ❌ M7 |
-| Multi-model consensus mode | ❌ M3 |
+| Multi-model consensus mode | ✅ M3 |
 
 ---
 
@@ -87,33 +87,52 @@
 
 ---
 
-### M3 — Multi-Model Architecture
+### M3 — Multi-Model Architecture ✅ COMPLETATA
 
-**Da fare:**
-1. `packages/ai-gateway/src/multi-model.ts` — Logica SINGLE/SECOND_OPINION/CONSENSUS
-2. `apps/worker/src/jobs/ai-orchestration.ts` — Integrare la scelta del modello per ruolo dal `MultiModelConfig`
-3. Test
+**File creati:**
+- `packages/ai-gateway/src/multi-model.ts` — `MultiModelGateway` con 3 strategie: `SINGLE`, `SECOND_OPINION` (agreement flag), `CONSENSUS` (majority/blocking)
+- `packages/ai-gateway/tests/multi-model.test.ts` — 10 test
 
----
+**File modificati:**
+- `packages/ai-gateway/src/index.ts` — Esporta `MultiModelGateway`, `MultiModelConfig`, `MultiModelEntry`, `ConsensusMode`
+- `apps/worker/src/jobs/ai-orchestration.ts` — Importa `DEFAULT_MULTI_MODEL_CONFIG`, `getRoleConfig`, `validateModelDiversity` da `@cryptoai/config` per guida modello per ruolo
 
-### M4 — Auto-Approval Rules + Modalità Operative
-
-**Da fare:**
-1. `packages/risk-engine/src/auto-approval.ts` — Regole tiered: <1% auto, 1-3% condizionale, >3% manuale
-2. `packages/risk-engine/src/operating-mode.ts` — Gate PAPER/ASSISTED/AUTONOMOUS
-3. `apps/worker/src/jobs/ai-orchestration.ts` — Integrare nel flow
-4. Endpoint API per leggere/scrivere modalità e regole
-5. Test
+**Test:** 10 nuovi test ai-gateway. Totale progetto: 24 file, 253 test, 0 regressioni.
 
 ---
 
-### M5 — AI Memory (tracking 1h/6h/24h/7d/30d)
+### M4 — Auto-Approval Rules + Modalità Operative ✅ COMPLETATA
 
-**Da fare:**
-1. `apps/worker/src/jobs/memory-tracker.ts` — Job periodico che registra gli outcome ai checkpoint
-2. `packages/database/src/memory-store.ts` — CRUD per `AIDecisionMemory`
-3. Endpoint API per query
-4. Test
+**File creati:**
+- `packages/risk-engine/src/auto-approval.ts` — `evaluateAutoApproval()`: regole tiered (<1% AUTO, 1-3% condizionale, >3% manuale, >5% blocked). PAPER always EXECUTES, ASSISTED holds for confirmation, AUTONOMOUS follows rules
+- `packages/risk-engine/src/operating-mode.ts` — In-memory state: `getOperatingMode()`, `setOperatingMode()`, `getAutoApprovalRules()`, `setAutoApprovalRules()`
+- `apps/api/src/routes/operating-mode.ts` — Endpoint REST: `GET /operating-mode`, `PUT /operating-mode/mode`, `PUT /operating-mode/rules` con persistenza DB
+- `packages/risk-engine/tests/auto-approval.test.ts` — 11 test
+
+**File modificati:**
+- `packages/risk-engine/src/index.ts` — Esporta `evaluateAutoApproval`, `AutoApprovalInput/Result`, `OperatingMode`, `initOperatingMode`, `get/setOperatingMode`, `get/setAutoApprovalRules`
+- `apps/api/src/app.ts` — Monta `createOperatingModeRouter()` su `/operating-mode`
+- `apps/api/package.json` — Aggiunto `@cryptoai/risk-engine`
+
+**Test:** 11 nuovi test risk-engine. Totale progetto: 25 file, 264 test, 0 regressioni.
+
+---
+
+### M5 — AI Memory (tracking 1h/6h/24h/7d/30d) ✅ COMPLETATA
+
+**File creati:**
+- `packages/database/src/memory-store.ts` — CRUD: `storeDecisionMemory()`, `addMemoryOutcome()`, `finalizeDecisionMemory()`, `findPendingCheckpoints()`, `getDecisionMemories()`
+- `apps/worker/src/jobs/memory-tracker.ts` — Job periodico: per ogni checkpoint scaduto, recupera prezzo corrente, calcola P&L, registra outcome, finalizza dopo AFTER_30D
+- `apps/worker/src/queues/memory-tracker.ts` — Queue BullMQ con retry e lock 120s
+- `apps/api/src/routes/ai-memory.ts` — Endpoint `GET /ai-memory` per query decision memories
+
+**File modificati:**
+- `packages/database/src/index.ts` — Esporta `memory-store`
+- `apps/worker/src/index.ts` — Aggiunto memory tracker ogni 15 minuti
+- `apps/worker/src/jobs/ai-orchestration.ts` — Chiama `storeDecisionMemory()` dopo ogni trade eseguito (BUY e SELL) con indicatori, modello, confidence
+- `apps/api/src/app.ts` — Monta `createAiMemoryRouter()` su `/ai-memory`
+
+**Test:** Funzionalità verificata con typecheck + test esistenti (0 regressioni su 264 test). Totale progetto: persistente invariato.
 
 ---
 

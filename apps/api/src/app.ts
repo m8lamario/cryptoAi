@@ -11,6 +11,11 @@ import { privateRouter } from "./routes/private.js";
 import { createMarketDataRouter } from "./routes/market-data.js";
 import { createAnalyticsRouter } from "./routes/analytics.js";
 import { createDashboardRouter } from "./routes/dashboard.js";
+import { createOperatingModeRouter } from "./routes/operating-mode.js";
+import { createAiMemoryRouter } from "./routes/ai-memory.js";
+import { createEquityHistoryRouter } from "./routes/equity-history.js";
+import { createTimelineRouter } from "./routes/timeline.js";
+import { createAgentStatusRouter } from "./routes/agent-status.js";
 import { requireAuth } from "./auth/middleware.js";
 import { createAuthRouter } from "./auth/router.js";
 import { InMemoryRateLimiter } from "./auth/rateLimiter.js";
@@ -46,6 +51,11 @@ export function createApp(deps: AppDeps = {}): Express {
   app.use("/market-data", authenticated, createMarketDataRouter());
   app.use("/analytics", authenticated, createAnalyticsRouter());
   app.use("/dashboard", authenticated, createDashboardRouter());
+  app.use("/operating-mode", authenticated, createOperatingModeRouter());
+  app.use("/ai-memory", authenticated, createAiMemoryRouter());
+  app.use("/equity-history", authenticated, createEquityHistoryRouter());
+  app.use("/timeline", authenticated, createTimelineRouter());
+  app.use("/agent-status", authenticated, createAgentStatusRouter());
 
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: "Not found" });

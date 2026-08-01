@@ -32,6 +32,9 @@ importers:
       '@cryptoai/market-data':
         specifier: workspace:*
         version: link:../../packages/market-data
+      '@cryptoai/risk-engine':
+        specifier: workspace:*
+        version: link:../../packages/risk-engine
       dotenv:
         specifier: ^16.6.1
         version: 16.6.1
@@ -166,6 +169,9 @@ importers:
       '@cryptoai/market-data':
         specifier: workspace:*
         version: link:../../packages/market-data
+      '@cryptoai/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
       '@cryptoai/paper-executor':
         specifier: workspace:*
         version: link:../../packages/paper-executor

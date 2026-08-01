@@ -2,8 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Sidebar } from "../components/Sidebar";
-import { Section } from "../components/Section";
-import { StatsCard } from "../components/StatsCard";
+import { Hero } from "../components/Hero";
+import { EquityCurve } from "../components/EquityCurve";
+import { Timeline } from "../components/Timeline";
+import { AgentStatusBar } from "../components/AgentStatusBar";
+import { AiCosts } from "../components/AiCosts";
 import { OverviewTab } from "../components/tabs/OverviewTab";
 import { MarketTab } from "../components/tabs/MarketTab";
 import { AgentReportsTab } from "../components/tabs/AgentReportsTab";
@@ -142,7 +145,20 @@ export default function DashboardPage() {
 
         {/* Tab content */}
         <div className="p-6">
-          {activeTab === "overview" && <OverviewTab data={data} />}
+          {activeTab === "overview" && (
+            <div className="space-y-6">
+              <Hero kpis={data.kpis} />
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
+                <EquityCurve points={data.equityHistory} />
+                <AgentStatusBar agents={data.agentStatuses} />
+              </div>
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+                <Timeline events={data.timeline} />
+                <AiCosts summary={data.aiCostSummary} />
+              </div>
+              <OverviewTab data={data} />
+            </div>
+          )}
           {activeTab === "market" && <MarketTab data={data} />}
           {activeTab === "reports" && <AgentReportsTab data={data} />}
           {activeTab === "proposals" && <ProposalsTab data={data} />}

@@ -18,6 +18,7 @@
     "@cryptoai/contracts": "workspace:*",
     "@cryptoai/database": "workspace:*",
     "@cryptoai/market-data": "workspace:*",
+    "@cryptoai/notifications": "workspace:*",
     "@cryptoai/paper-executor": "workspace:*",
     "@cryptoai/quantitative": "workspace:*",
     "@cryptoai/risk-engine": "workspace:*",
