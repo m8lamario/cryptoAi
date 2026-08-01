@@ -32,6 +32,7 @@ import type {
 import {
   initPaperBalance,
   executePaperBuy,
+  executePaperSell,
   markToMarket,
   getPaperPortfolio,
 } from "@cryptoai/paper-executor";
@@ -548,35 +549,79 @@ export async function runAIOrchestration(
           // Paper Executor — only for APPROVED decisions
           if (riskDecision.status === "APPROVE" && riskDecision.positionSize) {
             try {
-              const execResult = await executePaperBuy(
-                assetData.symbol,
-                riskDecision.positionSize,
-                assetData.currentPrice,
-                {
-                  initialBalance: 10000,
-                  commissionRate: config.commissionRate,
-                  slippagePercent: config.slippagePercent,
-                  minPositionSize: config.minPositionSize,
-                },
-                managerReport.runId,
-                riskDecision.idempotencyKey,
-              );
+              // Check if we have an open LONG position for this asset (to sell)
+              const openPosition = await prisma.paperPosition.findFirst({
+                where: { asset: assetData.symbol, side: "LONG", status: "OPEN" },
+              });
 
-              if (execResult.status === "FILLED") {
-                totalOrders++;
+              const action = proposal.action;
+              const positionQuantity = openPosition ? Number(openPosition.quantity) : 0;
+
+              if (action === "SELL" && positionQuantity > 0) {
+                // Close existing position (full close)
+                const execResult = await executePaperSell(
+                  assetData.symbol,
+                  positionQuantity,
+                  assetData.currentPrice,
+                  {
+                    initialBalance: 10000,
+                    commissionRate: config.commissionRate,
+                    slippagePercent: config.slippagePercent,
+                    minPositionSize: config.minPositionSize,
+                  },
+                  managerReport.runId,
+                  riskDecision.idempotencyKey,
+                );
+
+                if (execResult.status === "FILLED") {
+                  totalOrders++;
+                }
+
+                logger.info(
+                  {
+                    symbol: assetData.symbol,
+                    orderId: execResult.orderId,
+                    status: execResult.status,
+                    side: "SELL",
+                    quantity: execResult.quantity,
+                    price: execResult.price,
+                    reason: execResult.reason,
+                  },
+                  "Paper order executed",
+                );
+              } else if (action === "BUY") {
+                // Open new position (or add to existing)
+                const execResult = await executePaperBuy(
+                  assetData.symbol,
+                  riskDecision.positionSize,
+                  assetData.currentPrice,
+                  {
+                    initialBalance: 10000,
+                    commissionRate: config.commissionRate,
+                    slippagePercent: config.slippagePercent,
+                    minPositionSize: config.minPositionSize,
+                  },
+                  managerReport.runId,
+                  riskDecision.idempotencyKey,
+                );
+
+                if (execResult.status === "FILLED") {
+                  totalOrders++;
+                }
+
+                logger.info(
+                  {
+                    symbol: assetData.symbol,
+                    orderId: execResult.orderId,
+                    status: execResult.status,
+                    side: "BUY",
+                    quantity: execResult.quantity,
+                    price: execResult.price,
+                    reason: execResult.reason,
+                  },
+                  "Paper order executed",
+                );
               }
-
-              logger.info(
-                {
-                  symbol: assetData.symbol,
-                  orderId: execResult.orderId,
-                  status: execResult.status,
-                  quantity: execResult.quantity,
-                  price: execResult.price,
-                  reason: execResult.reason,
-                },
-                "Paper order executed",
-              );
             } catch {
               logger.warn("Failed to execute paper order");
             }

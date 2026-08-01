@@ -345,13 +345,23 @@ export async function executePaperSell(
 
 /**
  * Update position mark prices (called periodically).
+ * Also updates PaperBalance totalValue, dailyPnl, and peakValue.
  */
 export async function markToMarket(prices: Array<{ asset: string; price: number }>): Promise<void> {
+  const balance = await prisma.paperBalance.findFirst();
+  if (!balance) return;
+
   const positions = await prisma.paperPosition.findMany({ where: { status: "OPEN" } });
+  let totalExposure = 0;
+  let totalUnrealizedPnl = 0;
 
   for (const pos of positions) {
     const p = prices.find((px) => px.asset === pos.asset);
-    if (!p) continue;
+    if (!p) {
+      totalExposure += Number(pos.quantity) * Number(pos.currentPrice);
+      totalUnrealizedPnl += Number(pos.unrealizedPnl);
+      continue;
+    }
 
     const entry = Number(pos.entryPrice);
     const qty = Number(pos.quantity);
@@ -359,10 +369,22 @@ export async function markToMarket(prices: Array<{ asset: string; price: number 
       ? (p.price - entry) * qty
       : (entry - p.price) * qty;
 
+    totalExposure += qty * p.price;
+    totalUnrealizedPnl += unrealized;
+
     await prisma.paperPosition.update({
       where: { id: pos.id },
       data: { currentPrice: p.price, unrealizedPnl: unrealized },
     });
   }
-}
 
+  const totalValue = Number(balance.quote) + totalExposure;
+  const currentPeak = Number(balance.peakValue);
+
+  await prisma.paperBalance.update({
+    where: { id: balance.id },
+    data: {
+      peakValue: totalValue > currentPeak ? totalValue : currentPeak,
+    },
+  });
+}
