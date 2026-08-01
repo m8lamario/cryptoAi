@@ -1,4 +1,4 @@
-// Technical shared contracts – Fase 0 + Fase 1
+// Technical shared contracts – Fase 0 + Fase 1 + v1.4 updates
 // No AI agents, no trade proposals, no exchange contracts.
 
 export type SystemEventLevel = "INFO" | "WARN" | "ERROR" | "CRITICAL";
@@ -145,6 +145,8 @@ export interface TradeProposalResponse {
   suggestedRiskFraction: number | null;
   invalidationConditions: string[];
   expiresAt: string | null;
+  /** v1.4: optional TradingPlan embedded in the proposal */
+  tradingPlan?: import("./trading-plan.js").TradingPlanResponse;
 }
 
 export interface DecisionGateResponse {
@@ -181,4 +183,91 @@ export interface SystemStatsResponse {
   totalAiCostUsd: number;
   reportStatusBreakdown: Record<string, number>;
   proposalStatusBreakdown: Record<string, number>;
+}
+
+// --- v1.4: Trading Plan ---
+export {
+  StrategySchema,
+  UrgencySchema,
+  TradingPlanSchema,
+} from "./trading-plan.js";
+export type { Strategy, Urgency, TradingPlan, TradingPlanResponse } from "./trading-plan.js";
+
+// --- v1.4: Market Opportunity Score ---
+export {
+  OpportunityClassificationSchema,
+  MarketOpportunityScoreSchema,
+  OPPORTUNITY_THRESHOLDS,
+  classifyOpportunity,
+} from "./opportunity-score.js";
+export type {
+  OpportunityClassification,
+  MarketOpportunityScore,
+  MarketOpportunityScoreResponse,
+} from "./opportunity-score.js";
+
+// --- v1.4: Operating Mode ---
+export {
+  OperatingModeSchema,
+  AutoApprovalRuleSchema,
+  DEFAULT_AUTO_APPROVAL_RULES,
+} from "./operating-mode.js";
+export type {
+  OperatingMode,
+  AutoApprovalRule,
+  OperatingModeConfigResponse,
+} from "./operating-mode.js";
+
+// --- v1.4: AI Decision Memory ---
+export {
+  MemoryCheckpointSchema,
+  MemoryOutcomeSchema,
+  AIDecisionMemorySchema,
+  CHECKPOINT_TIMINGS,
+} from "./ai-memory.js";
+export type {
+  MemoryCheckpoint,
+  MemoryOutcome,
+  AIDecisionMemory,
+  AIDecisionMemoryResponse,
+} from "./ai-memory.js";
+
+// --- Dashboard 2.0 KPI types (v1.4 Section 8) ---
+
+export interface DashboardKpiResponse {
+  equity: number;
+  totalPnl: number;
+  totalPnlPercent: number;
+  dailyPnl: number;
+  dailyPnlPercent: number;
+  roi: number;
+  winRate: number | null;
+  profitFactor: number | null;
+  sharpeRatio: number | null;
+  sortinoRatio: number | null;
+  maxDrawdown: number | null;
+  aiStatus: "ACTIVE" | "IDLE" | "ERROR";
+  operatingMode: "PAPER" | "ASSISTED" | "AUTONOMOUS";
+}
+
+export interface DashboardChartPoint {
+  timestamp: string;
+  equity: number;
+}
+
+export interface DashboardTimelineEvent {
+  id: string;
+  type: "TRADE_OPEN" | "TRADE_CLOSE" | "STOP_LOSS" | "TAKE_PROFIT" | "AI_DECISION" | "NEWS" | "WHALE" | "SYSTEM";
+  asset?: string;
+  description: string;
+  amount?: number;
+  timestamp: string;
+}
+
+export interface DashboardAgentStatus {
+  agentId: string;
+  label: string;
+  status: "GREEN" | "YELLOW" | "RED";
+  lastReportAt: string | null;
+  modelUsed: string | null;
 }

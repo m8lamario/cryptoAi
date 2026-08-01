@@ -395,10 +395,35 @@ export async function runAIOrchestration(
           minValidReports: config.decisionGateConfig.minValidReports,
         });
 
+        // Fetch open position for this asset (for portfolio-aware decisions)
+        let openPositions: Array<{
+          side: string;
+          quantity: number;
+          entryPrice: number;
+          currentPrice: number;
+          unrealizedPnl: number;
+        }> = [];
+        try {
+          const pos = await prisma.paperPosition.findFirst({
+            where: { asset: assetData.symbol, side: "LONG", status: "OPEN" },
+          });
+          if (pos) {
+            openPositions = [{
+              side: pos.side,
+              quantity: Number(pos.quantity),
+              entryPrice: Number(pos.entryPrice),
+              currentPrice: Number(pos.currentPrice),
+              unrealizedPnl: Number(pos.unrealizedPnl),
+            }];
+          }
+        } catch {
+          // DB may not be ready — no big deal
+        }
+
         const managerResult = await manager.runProposal({
           ...assetContext,
           gateway: config.gateway,
-          input: { symbol: assetData.symbol, reports: validReports },
+          input: { symbol: assetData.symbol, reports: validReports, openPositions },
         });
 
         // Use the REAL proposal from the Manager, not a fake one

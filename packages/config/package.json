@@ -18,8 +18,9 @@
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsup src/index.ts src/browser.ts --format esm,cjs --dts",
-    "typecheck": "tsc --noEmit"
+    "build": "tsup src/index.ts src/browser.ts src/multi-model.ts --format esm,cjs --dts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "zod": "^3.25.67"
@@ -28,6 +29,7 @@
     "@cryptoai/typescript-config": "workspace:*",
     "@types/node": "^20.19.7",
     "tsup": "^8.5.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.1"
   }
 }

@@ -220,37 +220,40 @@ export function evaluateTradeProposal(
   }
 
   // 10. Check total portfolio exposure after this trade
-  const newExposureNotional = sizing.positionSize * entryPrice;
-  const newAssetExposure = options.portfolio.assetExposure + newExposureNotional;
-  const newAssetExposurePercent =
-    options.portfolio.totalValue > 0
-      ? (newAssetExposure / options.portfolio.totalValue) * 100
-      : 0;
+  // NOTE: Skip exposure checks for SELL — selling always reduces exposure
+  if (proposal.action !== "SELL") {
+    const newExposureNotional = sizing.positionSize * entryPrice;
+    const newAssetExposure = options.portfolio.assetExposure + newExposureNotional;
+    const newAssetExposurePercent =
+      options.portfolio.totalValue > 0
+        ? (newAssetExposure / options.portfolio.totalValue) * 100
+        : 0;
 
-  if (newAssetExposurePercent > options.riskProfile.maxAssetExposurePercent + 1e-6) {
-    return makeDecision("BLOCK", "MAX_ASSET_EXPOSURE", `Asset exposure ${newAssetExposurePercent.toFixed(2)}% would exceed limit ${options.riskProfile.maxAssetExposurePercent}%`, {
-      observedValue: newAssetExposurePercent,
-      configuredLimit: options.riskProfile.maxAssetExposurePercent,
-      positionSize: sizing.positionSize,
-      stopLoss: sizing.stopLoss,
-      idempotencyKey,
-      now,
-    });
-  }
+    if (newAssetExposurePercent > options.riskProfile.maxAssetExposurePercent + 1e-6) {
+      return makeDecision("BLOCK", "MAX_ASSET_EXPOSURE", `Asset exposure ${newAssetExposurePercent.toFixed(2)}% would exceed limit ${options.riskProfile.maxAssetExposurePercent}%`, {
+        observedValue: newAssetExposurePercent,
+        configuredLimit: options.riskProfile.maxAssetExposurePercent,
+        positionSize: sizing.positionSize,
+        stopLoss: sizing.stopLoss,
+        idempotencyKey,
+        now,
+      });
+    }
 
-  const newTotalExposure = options.portfolio.currentExposure + newExposureNotional;
-  const newExposurePercent =
-    options.portfolio.totalValue > 0
-      ? (newTotalExposure / options.portfolio.totalValue) * 100
-      : 0;
+    const newTotalExposure = options.portfolio.currentExposure + newExposureNotional;
+    const newExposurePercent =
+      options.portfolio.totalValue > 0
+        ? (newTotalExposure / options.portfolio.totalValue) * 100
+        : 0;
 
-  if (newExposurePercent > options.riskProfile.maxPortfolioExposurePercent + 1e-6) {
-    return makeDecision("BLOCK", "MAX_PORTFOLIO_EXPOSURE", `Portfolio exposure ${newExposurePercent.toFixed(2)}% would exceed limit ${options.riskProfile.maxPortfolioExposurePercent}%`, {
-      observedValue: newExposurePercent,
-      configuredLimit: options.riskProfile.maxPortfolioExposurePercent,
-      idempotencyKey,
-      now,
-    });
+    if (newExposurePercent > options.riskProfile.maxPortfolioExposurePercent + 1e-6) {
+      return makeDecision("BLOCK", "MAX_PORTFOLIO_EXPOSURE", `Portfolio exposure ${newExposurePercent.toFixed(2)}% would exceed limit ${options.riskProfile.maxPortfolioExposurePercent}%`, {
+        observedValue: newExposurePercent,
+        configuredLimit: options.riskProfile.maxPortfolioExposurePercent,
+        idempotencyKey,
+        now,
+      });
+    }
   }
 
   // 11. Missing stop loss check
@@ -269,4 +272,3 @@ export function evaluateTradeProposal(
     now,
   });
 }
-

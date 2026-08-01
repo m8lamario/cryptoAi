@@ -78,3 +78,19 @@ export function getAuthConfig(): AuthConfig {
 
 export { getBrowserConfig } from "./browser.js";
 export type { BrowserConfig } from "./browser.js";
+
+export {
+  ModelFamilySchema,
+  ConsensusModeSchema,
+  RoleModelConfigSchema,
+  MultiModelConfigSchema,
+  DEFAULT_MULTI_MODEL_CONFIG,
+  getRoleConfig,
+  validateModelDiversity,
+} from "./multi-model.js";
+export type {
+  ModelFamily,
+  ConsensusMode,
+  RoleModelConfig,
+  MultiModelConfig,
+} from "./multi-model.js";

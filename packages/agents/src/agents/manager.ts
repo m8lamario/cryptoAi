@@ -10,6 +10,14 @@ import type {
 export interface ManagerAgentInput {
   symbol: string;
   reports: AgentReport[];
+  /** Open positions for this asset (for portfolio-aware decisions) */
+  openPositions?: Array<{
+    side: string;
+    quantity: number;
+    entryPrice: number;
+    currentPrice: number;
+    unrealizedPnl: number;
+  }>;
 }
 
 export interface ManagerRunResult {
@@ -120,6 +128,19 @@ function buildUserPrompt(input: ManagerAgentInput): string {
   lines.push(`BUY: ${buyCount}, SELL: ${sellCount}, HOLD: ${holdCount}, WAIT: ${waitCount}`);
   lines.push(`Average score: ${avgScore.toFixed(3)}`);
   lines.push(`Report IDs: ${validReports.map((r) => r.runId).join(", ")}`);
+
+  // Open positions context — critical for exit decisions
+  if (input.openPositions && input.openPositions.length > 0) {
+    lines.push("");
+    lines.push("--- Current Open Positions (YOU MUST CONSIDER THESE) ---");
+    for (const pos of input.openPositions) {
+      const pnlSign = pos.unrealizedPnl >= 0 ? "+" : "";
+      lines.push(
+        `[${pos.side}] qty=${pos.quantity.toFixed(6)} entry=$${pos.entryPrice.toFixed(2)} current=$${pos.currentPrice.toFixed(2)} unrealizedPnl=$${pnlSign}${pos.unrealizedPnl.toFixed(2)}`,
+      );
+    }
+    lines.push("IMPORTANT: If a position is in significant loss with bearish technicals, consider SELL. If in profit and trend is weakening, consider taking profit.");
+  }
 
   lines.push("");
   lines.push("Produce your TradeProposal as valid JSON.");

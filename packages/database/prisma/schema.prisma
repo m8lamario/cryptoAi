@@ -294,3 +294,73 @@ model BacktestRun {
   @@index([strategy, createdAt])
   @@index([asset, createdAt])
 }
+
+// --- v1.4: Trading Plan & Dashboard 2.0 ---
+
+model TradingPlan {
+  id                  String   @id @default(cuid())
+  proposalRunId       String   @unique
+  strategy            String   // SCALPING | INTRADAY | SWING | POSITION
+  expectedDuration    String
+  expectedProfitPercent Decimal @db.Decimal(8, 4)
+  expectedRiskPercent Decimal @db.Decimal(8, 4)
+  confidence          Decimal  @db.Decimal(4, 2)
+  suggestedEntry      Decimal  @db.Decimal(24, 8)
+  suggestedTakeProfit Decimal  @db.Decimal(24, 8)
+  suggestedStopLoss   Decimal  @db.Decimal(24, 8)
+  urgency             String   // LOW | MEDIUM | HIGH
+  reasons             Json
+  createdAt           DateTime @default(now())
+
+  @@index([proposalRunId])
+}
+
+model MarketOpportunityScore {
+  id              String   @id @default(cuid())
+  asset           String
+  score           Int      // 0-100
+  classification  String   // IGNORE | MONITORING | AI_ANALYSIS | MAX_PRIORITY
+  components      Json     // [{name, value, weight}, ...]
+  evaluatedAt     DateTime @default(now())
+
+  @@index([asset, evaluatedAt])
+  @@index([evaluatedAt])
+}
+
+model AIDecisionMemory {
+  id                    String   @id @default(cuid())
+  proposalRunId         String   @unique
+  asset                 String
+  action                String   // BUY | SELL
+  strategy              String?  // SCALPING | INTRADAY | SWING | POSITION
+  entryPrice            Decimal  @db.Decimal(24, 8)
+  indicatorsJson        Json
+  modelUsed             String
+  promptVersion         String
+  confidenceAtDecision  Decimal  @db.Decimal(4, 2)
+  decidedAt             DateTime
+  outcomes              Json     // [MemoryOutcome]
+  finalResult           Decimal? @db.Decimal(8, 4)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([asset, decidedAt])
+  @@index([modelUsed, createdAt])
+  @@index([proposalRunId])
+}
+
+model OperatingModeConfig {
+  id                  String   @id @default(cuid())
+  mode                String   @default("PAPER") // PAPER | ASSISTED | AUTONOMOUS
+  autoApprovalRules   Json     // AutoApprovalRule[]
+  updatedAt           DateTime @updatedAt
+}
+
+model EquitySnapshot {
+  id        String   @id @default(cuid())
+  equity    Decimal  @db.Decimal(24, 2)
+  timestamp DateTime @default(now())
+
+  @@index([timestamp])
+}
+

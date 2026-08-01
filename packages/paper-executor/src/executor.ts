@@ -385,6 +385,7 @@ export async function markToMarket(prices: Array<{ asset: string; price: number 
     where: { id: balance.id },
     data: {
       peakValue: totalValue > currentPeak ? totalValue : currentPeak,
+      dailyPnl: totalUnrealizedPnl,
     },
   });
 }
