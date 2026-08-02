@@ -5,7 +5,7 @@ export {
   executePaperSell,
   markToMarket,
 } from "./executor.js";
-export type { PaperExecutorConfig, ExecutionResult } from "./executor.js";
+export type { PaperExecutorConfig, ExecutionResult, PositionProtection } from "./executor.js";
 
 export {
   runBuyAndHold,
@@ -13,4 +13,3 @@ export {
   runHybridBacktest,
 } from "./backtest.js";
 export type { BacktestConfig, BacktestMetrics } from "./backtest.js";
-

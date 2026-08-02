@@ -75,6 +75,18 @@ describe("Risk Manager — Approval", () => {
     const decision2 = evaluateTradeProposal(makeProposal(), makeOptions());
     expect(decision1.idempotencyKey).toBe(decision2.idempotencyKey);
   });
+
+  it("keeps the idempotency key stable across retry timestamps when proposal identity is stable", () => {
+    const decision1 = evaluateTradeProposal(makeProposal(), makeOptions({ proposalRunId: "proposal-1", now }));
+    const decision2 = evaluateTradeProposal(makeProposal(), makeOptions({ proposalRunId: "proposal-1", now: new Date("2026-07-28T13:00:00Z") }));
+    expect(decision1.idempotencyKey).toBe(decision2.idempotencyKey);
+  });
+
+  it("uses different idempotency keys for different proposal identities", () => {
+    const decision1 = evaluateTradeProposal(makeProposal(), makeOptions({ proposalRunId: "proposal-1" }));
+    const decision2 = evaluateTradeProposal(makeProposal(), makeOptions({ proposalRunId: "proposal-2" }));
+    expect(decision1.idempotencyKey).not.toBe(decision2.idempotencyKey);
+  });
 });
 
 describe("Risk Manager — Kill switch", () => {

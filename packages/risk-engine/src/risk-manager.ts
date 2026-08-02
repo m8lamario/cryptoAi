@@ -24,16 +24,19 @@ export interface RiskManagerOptions {
   minPositionSize: number;
   /** Max staleness for market data (milliseconds) */
   maxDataAgeMs: number;
+  /** Stable logical proposal identity used for retries. */
+  proposalRunId?: string;
   /** Current time (injectable for testing) */
   now?: Date;
   /** Optional ATR value for stop-loss calculation */
   atrValue?: number | null;
 }
 
-function generateIdempotencyKey(tradeProposal: TradeProposal, now: Date): string {
+function generateIdempotencyKey(tradeProposal: TradeProposal, proposalRunId?: string): string {
   const hash = createHash("sha256");
   hash.update(JSON.stringify(tradeProposal));
-  hash.update(now.toISOString());
+  hash.update("\\u0000");
+  hash.update(proposalRunId ?? "legacy-proposal");
   return hash.digest("hex").substring(0, 16);
 }
 
@@ -74,7 +77,7 @@ export function evaluateTradeProposal(
   options: RiskManagerOptions,
 ): RiskDecision {
   const now = options.now ?? new Date();
-  const idempotencyKey = generateIdempotencyKey(proposal, now);
+  const idempotencyKey = generateIdempotencyKey(proposal, options.proposalRunId);
 
   // 1. Kill switch check
   if (options.killSwitchActive) {

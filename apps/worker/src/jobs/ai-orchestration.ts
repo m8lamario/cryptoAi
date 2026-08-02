@@ -36,7 +36,7 @@ import {
   markToMarket,
   getPaperPortfolio,
 } from "@cryptoai/paper-executor";
-import { storeAgentReport, storeTradeProposal, storeDecisionMemory } from "@cryptoai/database";
+import { storeAgentReport, storeTradeProposal } from "@cryptoai/database";
 import { logger } from "../logger.js";
 import {
   createConfiguredNotificationSender,
@@ -235,8 +235,6 @@ function computeIndicators(candles: AssetCandles["candles"]) {
   };
 }
 
-let lastKillSwitchActive: boolean | null = null;
-
 // --- Main Handler ---
 
 export async function runAIOrchestration(
@@ -269,8 +267,19 @@ export async function runAIOrchestration(
   // Init paper balance if needed
   try {
     await initPaperBalance(10000);
-  } catch {
-    logger.warn("Could not init paper balance (DB may not be ready)");
+  } catch (err) {
+    logger.error({ err }, "Paper balance initialization failed; skipping orchestration");
+    return {
+      status: "failed",
+      assetsProcessed: 0,
+      agentsRun: 0,
+      validReports: 0,
+      proposalsGenerated: 0,
+      decisionsMade: 0,
+      ordersExecuted: 0,
+      totalAiCostUsd: 0,
+      error: "Paper balance is not available",
+    };
   }
 
   // Load market data — M3: filter by asset if specified
@@ -508,6 +517,7 @@ export async function runAIOrchestration(
         }
 
         // Persist proposal
+        let proposalPersisted = false;
         try {
           await storeTradeProposal({
             runId: managerReport.runId,
@@ -531,9 +541,12 @@ export async function runAIOrchestration(
             latencyMs: managerReport.usage.latencyMs,
             estimatedCostUsd: managerReport.usage.estimatedCostUsd,
           });
-        } catch {
-          logger.warn("Failed to persist trade proposal");
+          proposalPersisted = true;
+        } catch (err) {
+          logger.error({ err, asset: assetData.symbol }, "Failed to persist trade proposal; skipping execution");
         }
+        if (!proposalPersisted) continue;
+
         totalProposals++;
 
         totalAiCost += managerReport.usage.estimatedCostUsd;
@@ -566,88 +579,55 @@ export async function runAIOrchestration(
 
         const gateResult = evaluateDecisionGate(proposal, dgReports, config.decisionGateConfig);
 
-        // Update proposal with decision gate result
         if (gateResult.decision === "APPROVE") {
-          try {
-            await prisma.storedTradeProposal.update({
-              where: { runId: managerReport.runId },
-              data: { decisionGateResult: "APPROVE" },
-            });
-          } catch { /* ignore */ }
-
-          // Risk Manager
           const portfolio = await getPaperPortfolio();
           const prices: AssetPrice[] = [{
             symbol: assetData.symbol,
             price: assetData.currentPrice,
             collectedAt: new Date(),
           }];
-
           const portfolioSnapshot: PortfolioSnapshot = {
             totalValue: portfolio.totalValue,
             currentExposure: portfolio.totalExposure,
-            assetExposure: 0,
+            assetExposure: portfolio.positions
+              .filter((position) => position.asset === assetData.symbol && position.side === "LONG")
+              .reduce((exposure, position) => exposure + position.quantity * position.currentPrice, 0),
             peakValue: portfolio.peakValue,
             dailyPnl: portfolio.dailyPnl,
           };
-
-          const killSwitch = await prisma.killSwitch.findFirst({
-            orderBy: { updatedAt: "desc" },
-          });
-
-          const killSwitchActive = killSwitch?.active ?? false;
-          if (killSwitchActive && lastKillSwitchActive !== true) {
-            void notify({
-              type: "KILL_SWITCH_ACTIVATED",
-              title: "Kill Switch Activated",
-              message: "Automatic paper trading is blocked by the kill switch.",
-              details: { reason: killSwitch?.reason ?? "Not specified" },
-            });
-          } else if (!killSwitchActive && lastKillSwitchActive === true) {
-            void notify({
-              type: "KILL_SWITCH_DEACTIVATED",
-              title: "Kill Switch Deactivated",
-              message: "The kill switch has been deactivated. Trading may resume.",
-              details: { timestamp: new Date().toISOString() },
-            });
-          }
-          lastKillSwitchActive = killSwitchActive;
-
+          const killSwitch = await prisma.killSwitch.findFirst({ orderBy: { updatedAt: "desc" } });
           const riskDecision = evaluateTradeProposal(proposal, {
             riskProfile: config.riskProfile,
             portfolio: portfolioSnapshot,
             prices,
-            killSwitchActive,
+            killSwitchActive: killSwitch?.active ?? false,
             minConfidence: config.minConfidence,
             minPositionSize: config.minPositionSize,
             maxDataAgeMs: config.maxDataAgeMs,
             atrValue: indicators.atr14,
+            proposalRunId: managerReport.runId,
           });
 
-          // Persist RiskDecision
-          try {
-            await prisma.riskDecision.create({
-              data: {
-                status: riskDecision.status,
-                ruleCode: riskDecision.ruleCode,
-                reason: riskDecision.reason,
-                proposalJson: JSON.parse(JSON.stringify(proposal)),
-                observedValue: riskDecision.observedValue,
-                configuredLimit: riskDecision.configuredLimit,
-                positionSize: riskDecision.positionSize,
-                stopLoss: riskDecision.stopLoss,
-                idempotencyKey: riskDecision.idempotencyKey,
-                asset: assetData.symbol,
-              },
-            });
-
-            await prisma.storedTradeProposal.update({
-              where: { runId: managerReport.runId },
-              data: { riskDecisionId: riskDecision.idempotencyKey },
-            });
-          } catch (err) {
-            logger.warn({ err }, "Failed to persist risk decision");
-          }
+          const persistedRiskDecision = await prisma.riskDecision.upsert({
+            where: { idempotencyKey: riskDecision.idempotencyKey },
+            create: {
+              status: riskDecision.status,
+              ruleCode: riskDecision.ruleCode,
+              reason: riskDecision.reason,
+              proposalJson: JSON.parse(JSON.stringify(proposal)),
+              observedValue: riskDecision.observedValue,
+              configuredLimit: riskDecision.configuredLimit,
+              positionSize: riskDecision.positionSize,
+              stopLoss: riskDecision.stopLoss,
+              idempotencyKey: riskDecision.idempotencyKey,
+              asset: assetData.symbol,
+            },
+            update: {},
+          });
+          await prisma.storedTradeProposal.update({
+            where: { runId: managerReport.runId },
+            data: { decisionGateResult: "APPROVE", riskDecisionId: persistedRiskDecision.id },
+          });
           totalDecisions++;
 
           if (riskDecision.status === "BLOCK") {
@@ -655,37 +635,19 @@ export async function runAIOrchestration(
               type: "PROPOSAL_BLOCKED",
               title: "Proposal Blocked by Risk Manager",
               message: riskDecision.reason,
-              details: {
-                asset: assetData.symbol,
-                ruleCode: riskDecision.ruleCode,
-                observedValue: riskDecision.observedValue,
-                configuredLimit: riskDecision.configuredLimit,
-              },
+              details: { asset: assetData.symbol, ruleCode: riskDecision.ruleCode },
             });
-
-            if (riskDecision.ruleCode === "DATA_TOO_STALE") {
-              void notify({
-                type: "DATA_STALE",
-                title: "Market Data Stale",
-                message: riskDecision.reason,
-                details: { asset: assetData.symbol, observedAgeMs: riskDecision.observedValue },
-              });
-            }
           }
 
-          // Paper Executor — only for APPROVED decisions
           if (riskDecision.status === "APPROVE" && riskDecision.positionSize) {
             try {
-              // Check if we have an open LONG position for this asset (to sell)
               const openPosition = await prisma.paperPosition.findFirst({
                 where: { asset: assetData.symbol, side: "LONG", status: "OPEN" },
               });
-
-              const action = proposal.action;
               const positionQuantity = openPosition ? Number(openPosition.quantity) : 0;
+              const action = proposal.action;
 
               if (action === "SELL" && positionQuantity > 0) {
-                // Close existing position (full close)
                 const execResult = await executePaperSell(
                   assetData.symbol,
                   positionQuantity,
@@ -699,44 +661,8 @@ export async function runAIOrchestration(
                   managerReport.runId,
                   riskDecision.idempotencyKey,
                 );
-
-                if (execResult.status === "FILLED") {
-                  totalOrders++;
-                  void notify({
-                    type: "INFO",
-                    title: "Paper Trade Executed",
-                    message: "A paper order was filled after deterministic risk approval.",
-                    details: {
-                      asset: assetData.symbol,
-                      action: "SELL",
-                      quantity: execResult.quantity,
-                      price: execResult.price,
-                      orderId: execResult.orderId,
-                    },
-                  });
-                  // v1.4: Record AI decision for memory tracking
-                  storeDecisionMemory({
-                    proposalRunId: managerReport.runId,
-                    asset: assetData.symbol,
-                    action: "SELL",
-                    strategy: null,
-                    entryPrice: assetData.currentPrice,
-                    indicatorsJson: {
-                      rsi14: indicators.rsi14,
-                      macd: indicators.macd,
-                      macdSignal: indicators.macdSignal,
-                      sma20: indicators.sma20,
-                      sma50: indicators.sma50,
-                      volatility: indicators.volatility,
-                    },
-                    modelUsed: managerReport.actualModel ?? managerReport.requestedModel,
-                    promptVersion: managerReport.promptVersion,
-                    confidenceAtDecision: proposal.confidence,
-                    decidedAt: new Date(),
-                  }).catch(() => { /* best-effort */ });
-                }
+                if (execResult.status === "FILLED") totalOrders++;
               } else if (action === "BUY") {
-                // Open new position (or add to existing)
                 const execResult = await executePaperBuy(
                   assetData.symbol,
                   riskDecision.positionSize,
@@ -749,46 +675,12 @@ export async function runAIOrchestration(
                   },
                   managerReport.runId,
                   riskDecision.idempotencyKey,
+                  { stopLoss: riskDecision.stopLoss },
                 );
-
-                if (execResult.status === "FILLED") {
-                  totalOrders++;
-                  void notify({
-                    type: "INFO",
-                    title: "Paper Trade Executed",
-                    message: "A paper order was filled after deterministic risk approval.",
-                    details: {
-                      asset: assetData.symbol,
-                      action: "BUY",
-                      quantity: execResult.quantity,
-                      price: execResult.price,
-                      orderId: execResult.orderId,
-                    },
-                  });
-                  // v1.4: Record AI decision for memory tracking
-                  storeDecisionMemory({
-                    proposalRunId: managerReport.runId,
-                    asset: assetData.symbol,
-                    action: "BUY",
-                    strategy: null,
-                    entryPrice: assetData.currentPrice,
-                    indicatorsJson: {
-                      rsi14: indicators.rsi14,
-                      macd: indicators.macd,
-                      macdSignal: indicators.macdSignal,
-                      sma20: indicators.sma20,
-                      sma50: indicators.sma50,
-                      volatility: indicators.volatility,
-                    },
-                    modelUsed: managerReport.actualModel ?? managerReport.requestedModel,
-                    promptVersion: managerReport.promptVersion,
-                    confidenceAtDecision: proposal.confidence,
-                    decidedAt: new Date(),
-                  }).catch(() => { /* best-effort */ });
-                }
+                if (execResult.status === "FILLED") totalOrders++;
               }
-            } catch {
-              logger.warn("Failed to execute paper order");
+            } catch (err) {
+              logger.warn({ err, asset: assetData.symbol }, "Failed to execute paper order");
             }
           }
         }

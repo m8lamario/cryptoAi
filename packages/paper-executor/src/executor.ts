@@ -20,8 +20,14 @@ export interface PaperExecutorConfig {
   minPositionSize: number;
 }
 
+export interface PositionProtection {
+  stopLoss?: number | null;
+  takeProfit?: number | null;
+}
+
 export interface ExecutionResult {
   orderId: string;
+  executionKey?: string;
   status: "FILLED" | "REJECTED";
   quantity: number;
   price: number;
@@ -29,20 +35,42 @@ export interface ExecutionResult {
   reason?: string;
 }
 
+function executionKeyFor(proposalRunId?: string, riskDecisionId?: string): string | undefined {
+  const key = riskDecisionId ?? proposalRunId;
+  return key && key.trim() !== "" ? key : undefined;
+}
+
+function rejected(price: number, reason: string): ExecutionResult {
+  return { orderId: randomUUID(), status: "REJECTED", quantity: 0, price, commission: 0, reason };
+}
+
+async function findExistingExecution(executionKey: string | undefined) {
+  return executionKey
+    ? prisma.paperOrder.findUnique({ where: { executionKey } })
+    : null;
+}
+
+async function getOrCreateBalance(initial: number, tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) {
+  return tx.paperBalance.upsert({
+    where: { singletonKey: "PAPER" },
+    update: {},
+    create: { singletonKey: "PAPER", quote: initial, peakValue: initial, dailyPnl: 0 },
+  });
+}
+
+async function createRejectedExecution(price: number, reason: string): Promise<ExecutionResult> {
+  return rejected(price, reason);
+}
+
 /**
  * Initialize paper balance if none exists.
  */
 export async function initPaperBalance(initialBalance: number): Promise<void> {
-  const existing = await prisma.paperBalance.findFirst();
-  if (!existing) {
-    await prisma.paperBalance.create({
-      data: {
-        quote: initialBalance,
-        peakValue: initialBalance,
-        dailyPnl: 0,
-      },
-    });
-  }
+  await prisma.paperBalance.upsert({
+    where: { singletonKey: "PAPER" },
+    update: {},
+    create: { singletonKey: "PAPER", quote: initialBalance, peakValue: initialBalance, dailyPnl: 0 },
+  });
 }
 
 /**
@@ -110,15 +138,14 @@ export async function executePaperBuy(
   config: PaperExecutorConfig,
   proposalRunId?: string,
   riskDecisionId?: string,
+  protection: PositionProtection = {},
 ): Promise<ExecutionResult> {
-  const existingOrder = riskDecisionId
-    ? await prisma.paperOrder.findFirst({ where: { riskDecisionId, status: "FILLED" } })
-    : proposalRunId
-      ? await prisma.paperOrder.findFirst({ where: { proposalRunId, status: "FILLED" } })
-      : null;
-  if (existingOrder) {
+  const executionKey = executionKeyFor(proposalRunId, riskDecisionId);
+  const existingOrder = await findExistingExecution(executionKey);
+  if (existingOrder?.status === "FILLED") {
     return {
       orderId: existingOrder.orderId,
+      executionKey: existingOrder.executionKey ?? undefined,
       status: "FILLED",
       quantity: Number(existingOrder.quantity),
       price: Number(existingOrder.price),
@@ -126,91 +153,68 @@ export async function executePaperBuy(
     };
   }
 
-  const balance = await prisma.paperBalance.findFirst();
-  const quote = Number(balance?.quote ?? 0);
-
-  if (!balance || !Number.isFinite(quantity) || quantity < config.minPositionSize || !Number.isFinite(price) || price <= 0) {
-    return {
-      orderId: randomUUID(),
-      status: "REJECTED",
-      quantity: 0,
-      price,
-      commission: 0,
-      reason: !balance ? "Paper balance is not initialized" : "Invalid or below-minimum order parameters",
-    };
+  if (!Number.isFinite(quantity) || quantity < config.minPositionSize || !Number.isFinite(price) || price <= 0) {
+    return createRejectedExecution(price, "Invalid or below-minimum order parameters");
   }
 
   const slippage = price * (1 + config.slippagePercent / 100);
   const commission = quantity * slippage * config.commissionRate;
   const totalCost = quantity * slippage + commission;
-
-  if (totalCost > quote) {
-    return {
-      orderId: randomUUID(),
-      status: "REJECTED",
-      quantity: 0,
-      price,
-      commission: 0,
-      reason: `Insufficient balance: need ${totalCost.toFixed(2)}, have ${quote.toFixed(2)}`,
-    };
-  }
-
   const orderId = randomUUID();
-  await prisma.paperOrder.create({
-    data: {
-      orderId,
-      asset,
-      side: "BUY",
-      type: "MARKET",
-      quantity,
-      price: slippage,
-      commission,
-      slippagePercent: config.slippagePercent,
-      status: "FILLED",
-      proposalRunId: proposalRunId ?? null,
-      riskDecisionId: riskDecisionId ?? null,
-      executedAt: new Date(),
-    },
-  });
 
-  // Open or add to position
-  const existing = await prisma.paperPosition.findFirst({
-    where: { asset, side: "LONG", status: "OPEN" },
-  });
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const existing = executionKey
+        ? await tx.paperOrder.findUnique({ where: { executionKey } })
+        : null;
+      if (existing?.status === "FILLED") {
+        return {
+          orderId: existing.orderId,
+          executionKey: existing.executionKey ?? undefined,
+          status: "FILLED" as const,
+          quantity: Number(existing.quantity),
+          price: Number(existing.price),
+          commission: Number(existing.commission),
+        };
+      }
 
-  if (existing) {
-    const newQty = Number(existing.quantity) + quantity;
-    const newEntry = (Number(existing.entryPrice) * Number(existing.quantity) + slippage * quantity) / newQty;
-    await prisma.paperPosition.update({
-      where: { id: existing.id },
-      data: {
-        quantity: newQty,
-        entryPrice: newEntry,
-        currentPrice: price,
-        unrealizedPnl: (price - newEntry) * newQty,
-      },
+      const balance = await getOrCreateBalance(config.initialBalance, tx);
+      const quote = Number(balance.quote);
+      if (totalCost > quote) {
+        return rejected(price, `Insufficient balance: need ${totalCost.toFixed(2)}, have ${quote.toFixed(2)}`);
+      }
+
+      const position = await tx.paperPosition.findFirst({
+        where: { asset, side: "LONG", status: "OPEN" },
+      });
+      if (position) {
+        const newQty = Number(position.quantity) + quantity;
+        const newEntry = (Number(position.entryPrice) * Number(position.quantity) + slippage * quantity) / newQty;
+        await tx.paperPosition.update({
+          where: { id: position.id },
+          data: { quantity: newQty, entryPrice: newEntry, currentPrice: price, unrealizedPnl: (price - newEntry) * newQty, stopLoss: protection.stopLoss ?? position.stopLoss, takeProfit: protection.takeProfit ?? position.takeProfit },
+        });
+      } else {
+        await tx.paperPosition.create({
+          data: { asset, side: "LONG", quantity, entryPrice: slippage, currentPrice: price, unrealizedPnl: (price - slippage) * quantity, stopLoss: protection.stopLoss ?? null, takeProfit: protection.takeProfit ?? null, status: "OPEN" },
+        });
+      }
+
+      await tx.paperBalance.update({ where: { id: balance.id }, data: { quote: quote - totalCost } });
+      await tx.paperOrder.create({
+        data: { orderId, executionKey: executionKey ?? null, asset, side: "BUY", type: "MARKET", quantity, price: slippage, commission, slippagePercent: config.slippagePercent, status: "FILLED", proposalRunId: proposalRunId ?? null, riskDecisionId: riskDecisionId ?? null, executedAt: new Date() },
+      });
+      return { orderId, executionKey, status: "FILLED" as const, quantity, price: slippage, commission };
     });
-  } else {
-    await prisma.paperPosition.create({
-      data: {
-        asset,
-        side: "LONG",
-        quantity,
-        entryPrice: slippage,
-        currentPrice: price,
-        unrealizedPnl: (price - slippage) * quantity,
-        status: "OPEN",
-      },
-    });
+  } catch (error) {
+    if (executionKey) {
+      const existing = await findExistingExecution(executionKey);
+      if (existing?.status === "FILLED") {
+        return { orderId: existing.orderId, executionKey, status: "FILLED", quantity: Number(existing.quantity), price: Number(existing.price), commission: Number(existing.commission) };
+      }
+    }
+    throw error;
   }
-
-  // Update balance
-  await prisma.paperBalance.update({
-    where: { id: balance.id },
-    data: { quote: quote - totalCost },
-  });
-
-  return { orderId, status: "FILLED", quantity, price: slippage, commission };
 }
 
 /**
@@ -224,14 +228,12 @@ export async function executePaperSell(
   proposalRunId?: string,
   riskDecisionId?: string,
 ): Promise<ExecutionResult> {
-  const existingOrder = riskDecisionId
-    ? await prisma.paperOrder.findFirst({ where: { riskDecisionId, status: "FILLED" } })
-    : proposalRunId
-      ? await prisma.paperOrder.findFirst({ where: { proposalRunId, status: "FILLED" } })
-      : null;
-  if (existingOrder) {
+  const executionKey = executionKeyFor(proposalRunId, riskDecisionId);
+  const existingOrder = await findExistingExecution(executionKey);
+  if (existingOrder?.status === "FILLED") {
     return {
       orderId: existingOrder.orderId,
+      executionKey: existingOrder.executionKey ?? undefined,
       status: "FILLED",
       quantity: Number(existingOrder.quantity),
       price: Number(existingOrder.price),
@@ -239,108 +241,55 @@ export async function executePaperSell(
     };
   }
 
-  const position = await prisma.paperPosition.findFirst({
-    where: { asset, side: "LONG", status: "OPEN" },
-  });
-
-  if (!position || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(price) || price <= 0) {
-    return {
-      orderId: randomUUID(),
-      status: "REJECTED",
-      quantity: 0,
-      price,
-      commission: 0,
-      reason: "No open LONG position for this asset",
-    };
+  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(price) || price <= 0) {
+    return rejected(price, "Invalid sell parameters");
   }
-
-  const balance = await prisma.paperBalance.findFirst();
-  if (!balance) {
-    return {
-      orderId: randomUUID(),
-      status: "REJECTED",
-      quantity: 0,
-      price,
-      commission: 0,
-      reason: "Paper balance is not initialized",
-    };
-  }
-
-  const posQty = Number(position.quantity);
-  const closeQty = Math.min(quantity, posQty);
-  const slippage = price * (1 - config.slippagePercent / 100);
-  const commission = closeQty * slippage * config.commissionRate;
-
-  const pnl = computePnl({
-    side: "BUY",
-    entryPrice: Number(position.entryPrice),
-    exitPrice: slippage,
-    quantity: closeQty,
-    commissionRate: config.commissionRate,
-    // Entry and exit fills already include the configured slippage.
-    slippagePercent: 0,
-  });
 
   const orderId = randomUUID();
-  await prisma.paperOrder.create({
-    data: {
-      orderId,
-      asset,
-      side: "SELL",
-      type: "MARKET",
-      quantity: closeQty,
-      price: slippage,
-      commission,
-      slippagePercent: config.slippagePercent,
-      status: "FILLED",
-      proposalRunId: proposalRunId ?? null,
-      riskDecisionId: riskDecisionId ?? null,
-      executedAt: new Date(),
-    },
-  });
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const existing = executionKey
+        ? await tx.paperOrder.findUnique({ where: { executionKey } })
+        : null;
+      if (existing?.status === "FILLED") {
+        return { orderId: existing.orderId, executionKey: existing.executionKey ?? undefined, status: "FILLED" as const, quantity: Number(existing.quantity), price: Number(existing.price), commission: Number(existing.commission) };
+      }
 
-  const remaining = posQty - closeQty;
-  if (remaining <= 0.00001) {
-    await prisma.paperPosition.update({
-      where: { id: position.id },
-      data: {
-        quantity: 0,
-        currentPrice: price,
-        unrealizedPnl: 0,
-        status: "CLOSED",
-        closedAt: new Date(),
-      },
+      const position = await tx.paperPosition.findFirst({ where: { asset, side: "LONG", status: "OPEN" } });
+      const balance = await tx.paperBalance.findUnique({ where: { singletonKey: "PAPER" } });
+      if (!position) return rejected(price, "No open LONG position for this asset");
+      if (!balance) return rejected(price, "Paper balance is not initialized");
+
+      const posQty = Number(position.quantity);
+      if (quantity > posQty + 1e-8) return rejected(price, "Sell quantity exceeds open position");
+      const closeQty = quantity;
+      const slippage = price * (1 - config.slippagePercent / 100);
+      const commission = closeQty * slippage * config.commissionRate;
+      const pnl = computePnl({ side: "BUY", entryPrice: Number(position.entryPrice), exitPrice: slippage, quantity: closeQty, commissionRate: config.commissionRate, slippagePercent: 0 });
+
+      await tx.paperOrder.create({
+        data: { orderId, executionKey: executionKey ?? null, asset, side: "SELL", type: "MARKET", quantity: closeQty, price: slippage, commission, slippagePercent: config.slippagePercent, status: "FILLED", proposalRunId: proposalRunId ?? null, riskDecisionId: riskDecisionId ?? null, executedAt: new Date() },
+      });
+
+      const remaining = posQty - closeQty;
+      if (remaining <= 1e-8) {
+        await tx.paperPosition.update({ where: { id: position.id }, data: { quantity: 0, currentPrice: price, unrealizedPnl: 0, status: "CLOSED", closedAt: new Date() } });
+      } else {
+        await tx.paperPosition.update({ where: { id: position.id }, data: { quantity: remaining, currentPrice: price, unrealizedPnl: (price - Number(position.entryPrice)) * remaining } });
+      }
+
+      const quote = Number(balance.quote);
+      const proceeds = closeQty * slippage - commission;
+      await tx.paperBalance.update({ where: { id: balance.id }, data: { quote: quote + proceeds, peakValue: Math.max(Number(balance.peakValue), quote + proceeds), dailyPnl: Number(balance.dailyPnl) + pnl.netPnl } });
+      return { orderId, executionKey, status: "FILLED" as const, quantity: closeQty, price: slippage, commission };
     });
-  } else {
-    await prisma.paperPosition.update({
-      where: { id: position.id },
-      data: {
-        quantity: remaining,
-        currentPrice: price,
-        unrealizedPnl: (price - Number(position.entryPrice)) * remaining,
-      },
-    });
+  } catch (error) {
+    if (executionKey) {
+      const existing = await findExistingExecution(executionKey);
+      if (existing?.status === "FILLED") return { orderId: existing.orderId, executionKey, status: "FILLED", quantity: Number(existing.quantity), price: Number(existing.price), commission: Number(existing.commission) };
+    }
+    throw error;
   }
-
-  // Update balance
-  const quote = Number(balance.quote);
-  const proceeds = closeQty * slippage - commission;
-  const newQuote = quote + proceeds;
-  const newPeak = Number(balance?.peakValue ?? initialBalance);
-
-  // Update daily PnL
-  const dailyPnl = (await prisma.paperBalance.findFirst())?.dailyPnl ?? 0;
-
-  await prisma.paperBalance.update({
-    where: { id: balance.id },
-    data: {
-      quote: newQuote,
-      peakValue: newQuote > newPeak ? newQuote : newPeak,
-      dailyPnl: Number(dailyPnl) + pnl.netPnl,
-    },
-  });
-
-  return { orderId, status: "FILLED", quantity: closeQty, price: slippage, commission };
 }
 
 /**
