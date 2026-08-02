@@ -15,11 +15,13 @@ import { RiskTab } from "../components/tabs/RiskTab";
 import { PortfolioTab } from "../components/tabs/PortfolioTab";
 import { BacktestsTab } from "../components/tabs/BacktestsTab";
 import { AuditTab } from "../components/tabs/AuditTab";
+import { ScannerTab } from "../components/tabs/ScannerTab";
 import type { DashboardData } from "./types";
 
 type Tab =
   | "overview"
   | "market"
+  | "scanner"
   | "reports"
   | "proposals"
   | "risk"
@@ -115,6 +117,7 @@ export default function DashboardPage() {
               {activeTab === "portfolio" && "Paper Portfolio"}
               {activeTab === "backtests" && "Backtest Results"}
               {activeTab === "audit" && "Audit Log"}
+              {activeTab === "scanner" && "Scanner"}
             </h2>
             <p className="text-xs text-muted">
               {new Date(data.systemStatus.timestamp).toLocaleString()}
@@ -166,6 +169,7 @@ export default function DashboardPage() {
           {activeTab === "portfolio" && <PortfolioTab data={data} />}
           {activeTab === "backtests" && <BacktestsTab data={data} />}
           {activeTab === "audit" && <AuditTab data={data} />}
+          {activeTab === "scanner" && <ScannerTab />}
         </div>
       </main>
     </div>

@@ -6,6 +6,37 @@ import type {
   DashboardTimelineEvent,
 } from "@cryptoai/contracts";
 
+// --- M5: Scanner types ---
+
+export interface OpportunityScoreData {
+  asset: string;
+  score: number;
+  classification: string;
+  components: { name: string; value: number; weight: number }[];
+  evaluatedAt: string;
+  change24h?: number | null;
+  price?: number | null;
+  volume24h?: number | null;
+}
+
+export interface ScannerConfigData {
+  maxAssetsToScan: number;
+  maxAssetsForQuant: number;
+  maxAssetsForAI: number;
+  minScoreForAI: number;
+  scannerFrequencyMinutes: number;
+  minVolume24hUsd: number;
+  minMarketCapUsd: number;
+}
+
+export interface WatchlistAssetData {
+  symbol: string;
+  active: boolean;
+  isPinned: boolean;
+  isExcluded: boolean;
+  maxCapitalUsd: number | null;
+}
+
 export interface DashboardData {
   systemStatus: { healthy: boolean; uptime: number; timestamp: string };
   marketData: {
@@ -66,4 +97,3 @@ export interface DashboardData {
   agentStatuses: DashboardAgentStatus[];
   aiCostSummary: DashboardAiCostSummary;
 }
-

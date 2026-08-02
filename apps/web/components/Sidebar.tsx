@@ -1,11 +1,12 @@
 "use client";
 import { useState } from "react";
 
-type Tab = "overview" | "market" | "reports" | "proposals" | "risk" | "portfolio" | "backtests" | "audit";
+type Tab = "overview" | "market" | "reports" | "proposals" | "risk" | "portfolio" | "backtests" | "audit" | "scanner";
 
 const NAV_ITEMS: { id: Tab; label: string; icon: string }[] = [
   { id: "overview", label: "Overview", icon: "◉" },
   { id: "market", label: "Market Data", icon: "⟐" },
+  { id: "scanner", label: "Scanner", icon: "◎" },
   { id: "reports", label: "Agent Reports", icon: "◆" },
   { id: "proposals", label: "Proposals", icon: "◇" },
   { id: "risk", label: "Risk Decisions", icon: "⟁" },
@@ -96,4 +97,3 @@ export function Sidebar({ activeTab, onTabChange, systemHealthy, killSwitchActiv
     </aside>
   );
 }
-

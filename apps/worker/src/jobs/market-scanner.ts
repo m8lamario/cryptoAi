@@ -14,6 +14,7 @@ import type {
 } from "@cryptoai/quantitative";
 import { storeOpportunityScore, getScannerConfig } from "@cryptoai/database";
 import { logger } from "../logger.js";
+import { createConfiguredNotificationSender } from "../notifications.js";
 
 // --- Job Types ---
 
@@ -171,6 +172,36 @@ export async function runMarketScanner(
         }
       }
       await aiQueue.close();
+    }
+
+    // --- 8. M6: Telegram notifications for scanner events ---
+    const notify = createConfiguredNotificationSender();
+
+    // Top opportunity alert (score ≥ 80)
+    const topOpportunities = results.filter((r) => r.score >= 80);
+    if (topOpportunities.length > 0) {
+      const top = topOpportunities[0]!;
+      void notify({
+        type: "OPPORTUNITY_DETECTED",
+        title: `🔥 Top Opportunity: ${top.asset}`,
+        message: `${top.asset} scored ${top.score}/100 (${top.classification.replace(/_/g, " ")}). ${topOpportunities.length} assets above 80.`,
+        details: {
+          asset: top.asset,
+          score: top.score,
+          classification: top.classification,
+          count: topOpportunities.length,
+        },
+      });
+    }
+
+    // No opportunities above threshold
+    if (triggeredAssets.length === 0 && results.length > 0) {
+      void notify({
+        type: "INFO",
+        title: "📊 Scanner: No AI triggers",
+        message: `Scanned ${results.length} assets. No assets scored above the AI threshold (${threshold}).`,
+        details: { threshold, assetCount: results.length },
+      });
     }
 
     logger.info(

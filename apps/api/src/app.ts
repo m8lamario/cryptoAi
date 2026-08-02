@@ -16,6 +16,9 @@ import { createAiMemoryRouter } from "./routes/ai-memory.js";
 import { createEquityHistoryRouter } from "./routes/equity-history.js";
 import { createTimelineRouter } from "./routes/timeline.js";
 import { createAgentStatusRouter } from "./routes/agent-status.js";
+import { createScannerConfigRouter } from "./routes/scanner-config.js";
+import { createOpportunityScoresRouter } from "./routes/opportunity-scores.js";
+import { createWatchlistRouter } from "./routes/watchlist.js";
 import { requireAuth } from "./auth/middleware.js";
 import { createAuthRouter } from "./auth/router.js";
 import { InMemoryRateLimiter } from "./auth/rateLimiter.js";
@@ -56,6 +59,9 @@ export function createApp(deps: AppDeps = {}): Express {
   app.use("/equity-history", authenticated, createEquityHistoryRouter());
   app.use("/timeline", authenticated, createTimelineRouter());
   app.use("/agent-status", authenticated, createAgentStatusRouter());
+  app.use("/scanner-config", authenticated, createScannerConfigRouter());
+  app.use("/opportunity-scores", authenticated, createOpportunityScoresRouter());
+  app.use("/watchlist", authenticated, createWatchlistRouter());
 
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: "Not found" });

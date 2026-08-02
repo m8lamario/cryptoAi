@@ -1,10 +1,10 @@
 # Project Plan: Hybrid AI Crypto Investment Agent
 
-**Versione:** 1.3  
-**Data:** 28 luglio 2026  
+**Versione:** 2.0  
+**Data:** 2 agosto 2026  
 **Ambito:** applicazione privata, single-user e self-hosted  
 **Piattaforma prevista:** mini PC Intel N100  
-**Obiettivo:** realizzare un assistente personale ibrido per l'analisi del mercato crypto, nel quale agenti AI producono valutazioni strutturate mentre dati, calcoli, gestione del rischio ed esecuzione rimangono deterministici e verificabili.
+**Obiettivo:** realizzare una piattaforma di investimento personale guidata da AI che massimizzi il rendimento corretto per il rischio, combinando agenti AI specializzati con un motore deterministico per calcoli, gestione del rischio ed esecuzione.
 
 ---
 
@@ -16,11 +16,16 @@ Creare una console finanziaria personale che analizzi il mercato crypto continua
 
 - agenti AI specializzati nell'interpretazione di dati tecnici, notizie, sentiment, movimenti whale e contesto macroeconomico;
 - software quantitativo per calcoli, indicatori e valutazioni numeriche;
+- un Market Scanner che individua autonomamente le migliori opportunità sull'intero mercato;
 - un Investment Manager AI che confronta i report e formula una proposta;
 - un motore deterministico che dimensiona la posizione e applica tutti i limiti di rischio;
 - paper trading obbligatorio prima di qualsiasi eventuale operatività reale.
 
+Il sistema deve massimizzare il rendimento corretto per il rischio nel medio e lungo periodo. L'AI può decidere autonomamente se non operare, fare scalping, intraday, swing o mantenere una posizione di lungo periodo. L'obiettivo non è aumentare il numero di trade ma la qualità delle decisioni.
+
 Il sistema non deve essere considerato una garanzia di profitto. La protezione del capitale, la tracciabilità e la possibilità di non operare hanno priorità sulla frequenza delle operazioni.
+
+L'AI non deve essere limitata a un elenco fisso di asset. Il sistema deve analizzare l'intero mercato e concentrare le risorse computazionali solamente sugli asset che presentano le migliori probabilità di generare un rendimento corretto per il rischio.
 
 ### 1.2 Ambito single-user
 
@@ -56,6 +61,7 @@ Devono rimanere deterministici:
 
 - raccolta e normalizzazione dei dati;
 - calcolo di indicatori tecnici;
+- Market Scanner e Opportunity Ranking;
 - calcolo di P&L, commissioni e slippage;
 - Position Sizer;
 - Risk Manager;
@@ -69,19 +75,34 @@ L'Investment Manager AI produce una `TradeProposal`, non un ordine eseguibile.
 ### 1.4 Obiettivi principali
 
 - Analisi multi-fonte tecnica, news, sentiment, whale e macro.
+- Market Scanner su 50-100 asset con ranking automatico.
 - Agenti AI con responsabilità e contesti separati.
+- AI attivata solo su asset con Opportunity Score elevato, per contenere i costi.
 - Output JSON strutturati, validati e versionati.
 - Spiegazione di ogni proposta e di ogni blocco.
 - Potere di veto assoluto del Risk Manager deterministico.
 - Audit completo di dati, report, modelli, prompt e decisioni.
+- AI Memory: ogni operazione tracciata con risultati a 1h, 6h, 24h, 7gg, 30gg.
 - Controllo del costo delle API AI.
 - Confronto con buy-and-hold e bot quantitativo senza AI.
 - Architettura modulare, ma senza microservizi prematuri.
 - Nessuna operazione reale finché la validazione non è completata.
 
+### 1.5 Visione finale della dashboard
+
+La dashboard deve apparire come una console professionale ispirata a TradingView e Bloomberg. L'utente deve poter capire in pochi secondi:
+
+1. Se il sistema sta guadagnando o perdendo.
+2. Quanto sta guadagnando/perdendo.
+3. Cosa sta facendo l'AI.
+4. Se è richiesta un'azione manuale.
+5. Qual è il livello di rischio attuale.
+
 ---
 
 ## 2. Architettura logica
+
+### 2.1 Flusso complessivo
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -90,10 +111,15 @@ L'Investment Manager AI produce una `TradeProposal`, non un ordine eseguibile.
 └───────────────────────────┬─────────────────────────────────┘
                             │ API interna
 ┌───────────────────────────▼─────────────────────────────────┐
-│                  Data & Quantitative Layer                  │
-│ Fetch, validazione, OHLCV, indicatori, volatilità, P&L      │
+│                Market Scanner & Data Layer                  │
+│ 50-100 asset, OHLCV, liquidità, volume, volatilità          │
 └───────────────────────────┬─────────────────────────────────┘
-                            │ contesti compatti
+                            │ Opportunity Score
+┌───────────────────────────▼─────────────────────────────────┐
+│               Quantitative & Filter Layer                   │
+│ Indicatori, ranking, filtri liquidità, top 10               │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ contesti compatti (top 3-5)
 ┌───────────────────────────▼─────────────────────────────────┐
 │                       AI Analyst Layer                      │
 │ Technical | News | Sentiment | Whale | Macro                │
@@ -115,7 +141,7 @@ L'Investment Manager AI produce una `TradeProposal`, non un ordine eseguibile.
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 2.1 Componenti sul mini PC N100
+### 2.2 Componenti sul mini PC N100
 
 Il mini PC ospita:
 
@@ -123,10 +149,12 @@ Il mini PC ospita:
 - API Node.js;
 - worker BullMQ;
 - orchestratore degli agenti;
+- Market Scanner;
 - PostgreSQL;
 - Redis;
 - acquisizione e normalizzazione dati;
 - calcoli quantitativi;
+- Opportunity Ranking;
 - Risk Manager;
 - paper trading;
 - audit log;
@@ -135,13 +163,19 @@ Il mini PC ospita:
 
 L'inferenza AI principale non viene eseguita localmente. Il mini PC richiama OpenRouter tramite un AI Gateway server-side.
 
-### 2.2 OpenRouter e modello per ruolo
+### 2.3 OpenRouter e architettura multi-modello
 
 Provider AI iniziale:
 
 ```text
 Provider: OpenRouter
 ```
+
+Il sistema supporta modelli di famiglie diverse (DeepSeek, GPT, Claude, Gemini) e può operare in tre modalità configurabili:
+
+1. **Singolo modello:** un modello per ruolo.
+2. **Secondo parere:** un secondo modello indipendente per casi ambigui o ad alto impatto.
+3. **Consenso tra modelli:** più modelli confrontati per decisioni critiche.
 
 Il modello non è fisso per tutto il sistema. Ogni ruolo ha un modello configurabile indipendentemente tramite l'AI Gateway, scelto secondo due criteri: costo/complessità del compito e diversità rispetto agli altri ruoli.
 
@@ -173,14 +207,7 @@ Linee guida applicative:
 
 Nonostante il provider possa offrire finestre di contesto superiori, il software deve inviare soltanto dati pertinenti e sintetici.
 
-### 2.5 Cadenza operativa
-
-- Livello deterministico (raccolta dati, indicatori): ogni 15 minuti.
-- Ciclo AI completo (agenti attivi + Investment Manager): ogni 1 ora, come baseline.
-- Rivalutazione anticipata event-driven: solo su variazione di prezzo superiore a una soglia configurabile (es. ±3% in 15 minuti), non su ogni notizia o evento minore, per mantenere il costo prevedibile.
-- La cadenza del ciclo AI è configurabile e va ricalibrata quando il numero di agenti attivi aumenta (vedi Fase 3).
-
-### 2.3 AI Gateway
+### 2.4 AI Gateway
 
 Tutti gli agenti devono usare un'interfaccia comune. Nessun agente può chiamare OpenRouter direttamente.
 
@@ -202,7 +229,7 @@ Responsabilità dell'AI Gateway:
 - versionamento di prompt e schema;
 - rimozione dei segreti dai log.
 
-### 2.4 Regole di indisponibilità
+### 2.5 Regole di indisponibilità
 
 - Errore AI non significa `HOLD`.
 - Una chiamata fallita produce `UNAVAILABLE`.
@@ -211,6 +238,70 @@ Responsabilità dell'AI Gateway:
 - Con tre o meno report validi su cinque non vengono aperte nuove posizioni.
 - Il numero minimo di report richiesti deve essere configurabile.
 - Dati scaduti o incompleti devono ridurre la qualità o bloccare la decisione.
+
+### 2.6 Cadenza operativa e trigger event-driven
+
+Il sistema combina due meccanismi di attivazione:
+
+**Market Scanner (continuo):**
+
+- Lo scanner viene eseguito ogni 30-60 secondi sulle prime 50-100 criptovalute.
+- Su ogni asset vengono calcolati indicatori tecnici e un Market Opportunity Score.
+- L'AI viene attivata solo quando uno o più asset presentano condizioni interessanti.
+- Il ciclo AI non è più a intervalli fissi ma guidato dalle opportunità di mercato.
+
+**Ciclo deterministico (sempre attivo):**
+
+- Raccolta dati e calcolo indicatori: ogni 15 minuti.
+- Market Scanner e Opportunity Score: ogni 30-60 secondi.
+
+**Ciclo AI (event-driven):**
+
+- Attivato quando uno o più asset superano la soglia di Opportunity Score configurabile.
+- Rivalutazione anticipata anche su variazione di prezzo superiore a una soglia configurabile (es. ±3% in 15 minuti).
+- La cadenza e le soglie sono configurabili e vanno ricalibrate quando il numero di agenti attivi aumenta.
+
+### 2.7 Market Scanner e Pipeline Decisionale
+
+Il Market Scanner analizza periodicamente 50-100 criptovalute e produce una classifica ordinata di opportunità.
+
+```text
+Scanner Mercato (50-100 asset)
+        ↓
+Filtri di liquidità e volume
+        ↓
+Opportunity Score (0-100)
+        ↓
+Top 10 per Analisi Quantitativa
+        ↓
+Top 3-5 per Agenti AI
+        ↓
+Investment Manager
+        ↓
+Risk Manager
+        ↓
+Paper Trading / Trading Reale
+```
+
+### 2.8 Opportunity Ranking
+
+Ogni asset riceve un Opportunity Score da 0 a 100 basato su metriche deterministiche:
+
+- volume, volatilità, variazione percentuale, liquidità, market cap;
+- RSI, MACD, ATR, EMA, SMA, breakout;
+- funding rate, open interest;
+- whale activity, sentiment, news.
+
+Classificazione:
+
+| Score      | Azione                    |
+|------------|---------------------------|
+| 0-30       | Ignora                    |
+| 30-60      | Monitoraggio              |
+| 60-80      | Analisi quantitativa      |
+| 80-100     | Analisi AI completa       |
+
+L'Investment Manager riceve esclusivamente gli asset con il punteggio più elevato (top 3-5), concentrando le risorse AI dove il potenziale di rendimento corretto per il rischio è maggiore.
 
 ---
 
@@ -255,9 +346,17 @@ L'Investment Manager produce:
 status: VALID | NO_ACTION | UNAVAILABLE | INVALID | AMBIGUOUS
 asset
 action: BUY | SELL | HOLD | WAIT | null
+strategy: SCALPING | INTRADAY | SWING | POSITION
+expectedDuration: string
+expectedProfitPercent: number
+expectedRiskPercent: number
 confidence
+urgency: LOW | MEDIUM | HIGH
 rationale[]
 reportIds[]
+suggestedEntry: number
+suggestedTakeProfit: number
+suggestedStopLoss: number
 suggestedRiskFraction
 invalidationConditions[]
 expiresAt
@@ -379,6 +478,7 @@ Viene mantenuta l'entità `User`, ma l'applicazione applica la regola single-own
 │           ├── agents/
 │           ├── jobs/
 │           ├── orchestration/
+│           ├── scanner/
 │           └── notifications/
 ├── packages/
 │   ├── contracts/
@@ -414,7 +514,27 @@ Viene mantenuta l'entità `User`, ma l'applicazione applica la regola single-own
 
 ---
 
-## 7. Roadmap
+## 7. Roadmap degli asset
+
+### 7.1 Fase MVP
+
+Asset iniziali: **BTC, ETH, SOL**
+
+Obiettivo: validare la pipeline dati, il Risk Manager, il Paper Trading, il Decision Engine e raccogliere metriche.
+
+### 7.2 Fase Intermedia
+
+Espandere gradualmente il monitoraggio includendo: **BNB, XRP, LINK, SUI, AVAX, DOGE**
+
+Totale previsto: 8-10 asset ad alta capitalizzazione e liquidità.
+
+### 7.3 Fase Avanzata
+
+Il sistema non utilizza più una watchlist fissa. Ogni ciclo esegue uno scanner sul mercato e seleziona automaticamente gli asset più interessanti tra le prime 50-100 criptovalute.
+
+---
+
+## 8. Roadmap di sviluppo
 
 ### Fase 0 - Fondamenta private single-user
 
@@ -469,7 +589,7 @@ Attività:
 
 ### Fase 1 - Pipeline dati di mercato
 
-**Obiettivo:** acquisire e storicizzare dati reali.
+**Obiettivo:** acquisire e storicizzare dati reali per gli asset MVP (BTC, ETH, SOL).
 
 Attività:
 
@@ -580,16 +700,16 @@ Attività:
 - qualità dei dati;
 - gestione del disaccordo: se la varianza dei punteggi degli agenti pesati per confidence supera una soglia configurabile, o se agenti con confidence comparabile producono segnali opposti, la proposta ottiene `status: AMBIGUOUS` invece di un'azione automatica;
 - notifica Telegram per ogni proposta `AMBIGUOUS`, con il riepilogo di `signal`, `score`, `confidence` e una sintesi del `reasoning` per ciascun `AgentReport` coinvolto, per consentire una decisione manuale informata;
-- output `TradeProposal`;
+- output `TradeProposal` con `TradingPlan` (strategia, durata prevista, profit/risk attesi, entry/TP/SL);
 - scadenza della proposta;
 - condizioni di invalidazione;
 - nessun importo definitivo;
 - Decision Gate deterministico dopo il Manager;
-- eventuale Second Opinion opzionale.
+- eventuale Second Opinion opzionale con modello di famiglia diversa.
 
 **Criterio di completamento:** il Manager propone `BUY`, `SELL`, `HOLD`, `WAIT` o `NO_ACTION`, ma non può eseguire l'operazione.
 
-### Fase 5 - Memoria e valutazione
+### Fase 5 - Memoria e valutazione (AI Memory)
 
 Attività:
 
@@ -597,12 +717,14 @@ Attività:
 - registrazione di ogni `TradeProposal`;
 - registrazione dei blocchi del Risk Manager;
 - versionamento prompt e modello;
+- tracciamento del risultato di ogni operazione dopo: 1 ora, 6 ore, 24 ore, 7 giorni, 30 giorni;
 - accuratezza per agente e modello;
 - percentuale di JSON validi;
 - fallback rate;
 - latenza;
 - costo per agente;
-- confronto fra confidence e risultato effettivo.
+- confronto fra confidence e risultato effettivo;
+- confronto periodico fra modelli e prompt per migliorare le performance nel tempo.
 
 **Criterio di completamento:** performance e affidabilità sono misurabili per agente, modello e versione del prompt.
 
@@ -610,26 +732,29 @@ Attività:
 
 Schermate:
 
-- stato del sistema;
-- stato dei servizi;
-- ultimi dati di mercato;
-- report degli agenti;
-- proposte del Manager;
+- **Hero:** Valore Portafoglio, Profitto Totale, Profitto Giornaliero, Stato AI;
+- **KPI:** Equity, P&L, ROI, Win Rate, Profit Factor, Sharpe Ratio, Max Drawdown;
+- **Grafici:** Equity Curve, distribuzione trade, performance per asset, performance per strategia;
+- **Opportunity Ranking:** posizione, asset, score, variazione 24h, stato;
+- **Heatmap Mercato:** trend, volatilità, momentum, opportunità;
+- **Watchlist Dinamica:** aggiornata automaticamente dallo scanner, con possibilità di bloccare/escludere asset e definire whitelist/blacklist;
+- **Ultima Decisione:** BUY/SELL, confidence, strategia, durata prevista, motivazione;
+- **Stato Agenti:** Technical, Macro, News, Whale, Sentiment, Investment Manager (🟢 🟡 🔴);
+- **Timeline:** cronologia aperture, chiusure, stop loss, take profit, news, whale, decisioni AI;
+- **Costi AI:** token utilizzati, costo giornaliero, costo mensile, budget residuo;
+- stato del sistema e dei servizi;
+- report degli agenti e proposte del Manager;
 - blocchi del Risk Manager;
 - configurazione del rischio;
-- paper portfolio;
-- storico decisioni;
-- costi OpenRouter;
-- budget residuo;
-- kill switch;
-- audit log.
+- paper portfolio e storico decisioni;
+- kill switch e audit log.
 
-Notifiche:
+Notifiche Telegram:
 
-- Telegram per eventi critici;
+- evento critico;
 - opportunità rilevata;
 - proposta bloccata;
-- richiesta di approvazione;
+- richiesta di approvazione (proposta `AMBIGUOUS` o sopra soglia);
 - budget AI esaurito;
 - dati scaduti;
 - servizio non disponibile;
@@ -668,7 +793,8 @@ Metriche:
 - costo API;
 - percentuale di operazioni corrette;
 - profitto e perdita medi;
-- stabilità fuori campione.
+- stabilità fuori campione;
+- tempo medio delle operazioni.
 
 **Criterio di completamento:** il sistema ibrido deve dimostrare un beneficio misurabile corretto per rischio e costi, non soltanto un rendimento maggiore in un singolo test.
 
@@ -692,9 +818,79 @@ Attività:
 
 **Criterio di completamento:** nessuna operatività reale senza controlli superati e autorizzazione esplicita del proprietario.
 
+### Fase 9 - Market Scanner e Multi-Asset
+
+**Obiettivo:** evolvere dal monitoraggio fisso a un motore di scoperta automatica delle opportunità.
+
+Attività:
+
+- implementare il Market Scanner per 50-100 criptovalute;
+- calcolare l'Opportunity Score per ogni asset;
+- implementare i filtri di liquidità e volume;
+- instradare solo i top asset (top 10 per analisi quantitativa, top 3-5 per agenti AI);
+- aggiornare la watchlist dinamicamente;
+- permettere whitelist/blacklist configurabili;
+- esporre l'Opportunity Ranking nella dashboard;
+- mostrare la heatmap di mercato.
+
+**Criterio di completamento:**
+- lo scanner analizza almeno 50 asset;
+- il ranking viene aggiornato automaticamente;
+- gli agenti AI analizzano solo gli asset prioritari;
+- la dashboard mostra chiaramente le migliori opportunità del momento;
+- il sistema mantiene tempi di risposta e costi prevedibili.
+
 ---
 
-## 8. Sicurezza
+## 9. Modalità operative
+
+### 9.1 Paper Trading
+
+100% virtuale. Tutte le operazioni sono simulate con commissioni e slippage realistici. È la modalità predefinita e obbligatoria prima di qualsiasi trading reale.
+
+### 9.2 Assisted Trading
+
+L'AI propone, l'utente conferma. Ogni `TradeProposal` richiede approvazione manuale prima dell'esecuzione. L'utente può modificare i parametri o rifiutare.
+
+### 9.3 Autonomous Trading
+
+L'AI esegue automaticamente entro i limiti definiti. Le regole di approvazione automatica (vedi §10) determinano quali trade possono essere eseguiti senza intervento manuale. Il Risk Manager ha sempre potere di veto.
+
+---
+
+## 10. Approvazione automatica
+
+Regole per l'esecuzione automatica in modalità Autonomous Trading:
+
+| Condizione               | Azione                                          |
+|--------------------------|-------------------------------------------------|
+| Trade < 1% capitale      | Automatico                                       |
+| Trade 1-3% capitale      | Automatico solo con confidence elevata           |
+| Trade > 3% capitale      | Richiede approvazione manuale                    |
+| Trade > 5% capitale      | Sempre approvazione manuale                      |
+
+Le soglie sono configurabili. In modalità Assisted Trading, ogni trade richiede approvazione indipendentemente dall'importo.
+
+---
+
+## 11. Configurazione
+
+Parametri modificabili dal proprietario:
+
+- numero massimo di asset analizzati dallo scanner (default: 100);
+- numero massimo di asset inviati agli agenti AI (default: 5);
+- soglia minima Opportunity Score per attivare l'AI (default: 60);
+- frequenza dello scanner (default: 30-60 secondi);
+- capitale massimo per asset;
+- soglie di approvazione automatica (§10);
+- quorum minimo di report validi;
+- budget AI giornaliero e mensile;
+- soglia di rivalutazione anticipata (es. ±3% in 15 minuti);
+- watchlist: asset bloccati, esclusi, whitelist e blacklist.
+
+---
+
+## 12. Sicurezza
 
 - Segreti esclusivamente in variabili d'ambiente o secret store.
 - `.env` escluso da Git.
@@ -713,7 +909,7 @@ Attività:
 
 ---
 
-## 9. Gestione dei rischi di progetto
+## 13. Gestione dei rischi di progetto
 
 ### Overengineering
 
@@ -725,11 +921,11 @@ Attività:
 
 ### Falso consenso
 
-**Mitigazione:** fonti e responsabilità differenti, prompt separati, qualità dei dati esplicita e registrazione del modello usato.
+**Mitigazione:** fonti e responsabilità differenti, prompt separati, qualità dei dati esplicita, registrazione del modello usato e supporto multi-modello per second opinion.
 
 ### Costi OpenRouter inattesi
 
-**Mitigazione:** limiti di token, cache, chiamate event-driven, budget giornaliero e mensile, circuit breaker e output brevi.
+**Mitigazione:** limiti di token, attivazione event-driven (solo su asset con Opportunity Score elevato), budget giornaliero e mensile, circuit breaker e output brevi.
 
 ### Modello indisponibile
 
@@ -753,7 +949,7 @@ Attività:
 
 ---
 
-## 10. Milestone
+## 14. Milestone
 
 ### M1 - Fondamenta
 
@@ -761,7 +957,7 @@ Monorepo, dashboard privata minimale, API, worker, PostgreSQL, Redis e CI funzio
 
 ### M2 - Dati e motore deterministico
 
-Dati reali, indicatori, Position Sizer e Risk Manager testati.
+Dati reali (BTC, ETH, SOL), indicatori, Position Sizer e Risk Manager testati.
 
 ### M3 - AI Gateway
 
@@ -775,17 +971,25 @@ Cinque agenti producono report validati e tracciabili.
 
 Investment Manager AI produce proposte sottoposte al Decision Gate e al Risk Manager.
 
-### M6 - Paper trading
+### M6 - Dashboard operativa
+
+Dashboard completa con KPI, equity curve, stato agenti, costi AI, Opportunity Ranking, heatmap e watchlist dinamica.
+
+### M7 - Paper trading
 
 Sistema valutato rispetto a buy-and-hold e bot quantitativo.
 
-### M7 - Eventuale go-live controllato
+### M8 - Market Scanner e Multi-Asset
+
+Scanner su 50+ asset, ranking automatico, AI attivata solo sugli asset prioritari.
+
+### M9 - Eventuale go-live controllato
 
 Solo dopo risultati fuori campione, periodo di paper trading e revisione completa della sicurezza.
 
 ---
 
-## 11. Criteri globali di successo
+## 15. Criteri globali di successo
 
 Il progetto è considerato tecnicamente valido quando:
 
@@ -798,13 +1002,16 @@ Il progetto è considerato tecnicamente valido quando:
 - paper trading e backtesting includono costi realistici;
 - il sistema ibrido viene confrontato con baseline più semplici;
 - lint, typecheck, test e build sono automatizzati;
-- l'eventuale trading reale richiede una decisione esplicita separata.
+- l'eventuale trading reale richiede una decisione esplicita separata;
+- lo scanner analizza almeno 50 asset e il ranking viene aggiornato automaticamente;
+- gli agenti AI analizzano solo gli asset prioritari;
+- la dashboard mostra chiaramente le migliori opportunità del momento.
 
 Il sistema ibrido è considerato migliore di un bot tradizionale soltanto se dimostra su dati fuori campione un miglioramento stabile del rendimento corretto per il rischio, senza costi o drawdown sproporzionati.
 
 ---
 
-## 12. Funzionalità esplicitamente fuori scope
+## 16. Funzionalità esplicitamente fuori scope
 
 - registrazione pubblica;
 - multi-tenancy;
