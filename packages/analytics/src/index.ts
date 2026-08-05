@@ -3,6 +3,7 @@ export {
   getModelPerformance,
   getPromptVersionPerformance,
   getSystemStats,
+  getPnlBreakdown,
 } from "./metrics.js";
 
 export type {
@@ -10,5 +11,5 @@ export type {
   ModelPerformanceMetrics,
   PromptVersionMetrics,
   SystemStats,
+  PnlBreakdownMetrics,
 } from "./metrics.js";
-

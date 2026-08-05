@@ -14,3 +14,14 @@ export {
 } from "./scanner-config-store.js";
 export type { ScannerConfigData, AssetConfigData } from "./scanner-config-store.js";
 export { DEFAULT_SCANNER_CONFIG } from "./scanner-config-store.js";
+export {
+  hashConfigurationPayload,
+  upsertConfigurationSnapshot,
+  getConfigurationSnapshots,
+  upsertDecisionAudit,
+  getDecisionAudit,
+  recordOutcomeCheckpoint,
+  savePerformanceSnapshot,
+  getPnlBreakdown,
+} from "./m0-audit-store.js";
+export type { M0ConfigurationKind, ConfigurationSnapshotInput, DecisionAuditInput } from "./m0-audit-store.js";

@@ -52,3 +52,29 @@ export interface MarketOpportunityScoreResponse {
   components: { name: string; value: number; weight: number }[];
   evaluatedAt: string;
 }
+
+export const DirectionalQuantitativeScoreSchema = z.object({
+  asset: z.string(),
+  score: z.number().min(0).max(100),
+  classification: OpportunityClassificationSchema,
+  components: z.array(OpportunityComponentSchema),
+  direction: z.enum(["LONG", "SHORT", "FLAT"]),
+  opportunityIntensity: z.number().min(0).max(100),
+  directionScore: z.number().min(-100).max(100),
+  expectedMove: z.number(),
+  expectedRisk: z.number().nonnegative(),
+  estimatedCosts: z.object({
+    spread: z.number().nonnegative(),
+    slippage: z.number().nonnegative(),
+    fees: z.number().nonnegative(),
+    turnover: z.number().nonnegative(),
+    total: z.number().nonnegative(),
+  }),
+  netEdge: z.number(),
+  horizonCandles: z.number().int().positive(),
+  formulaVersion: z.string().min(1),
+  featureVersion: z.string().min(1),
+  features: z.record(z.number().nullable()),
+  evaluatedAt: z.string().datetime(),
+});
+export type DirectionalQuantitativeScore = z.infer<typeof DirectionalQuantitativeScoreSchema>;

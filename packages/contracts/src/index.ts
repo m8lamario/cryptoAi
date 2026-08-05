@@ -197,6 +197,7 @@ export type { Strategy, Urgency, TradingPlan, TradingPlanResponse } from "./trad
 export {
   OpportunityClassificationSchema,
   MarketOpportunityScoreSchema,
+  DirectionalQuantitativeScoreSchema,
   OPPORTUNITY_THRESHOLDS,
   classifyOpportunity,
 } from "./opportunity-score.js";
@@ -204,6 +205,7 @@ export type {
   OpportunityClassification,
   MarketOpportunityScore,
   MarketOpportunityScoreResponse,
+  DirectionalQuantitativeScore,
 } from "./opportunity-score.js";
 
 // --- v1.4: Operating Mode ---

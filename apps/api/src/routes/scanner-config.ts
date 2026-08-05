@@ -2,7 +2,6 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { getScannerConfig, updateScannerConfig } from "@cryptoai/database";
-import type { ScannerConfigData } from "@cryptoai/database";
 import { logger } from "../logger.js";
 
 const ScannerConfigPatchSchema = z.object({
@@ -10,12 +9,10 @@ const ScannerConfigPatchSchema = z.object({
   maxAssetsForQuant: z.number().int().min(1).max(100).optional(),
   maxAssetsForAI: z.number().int().min(1).max(50).optional(),
   minScoreForAI: z.number().int().min(0).max(100).optional(),
-  scannerFrequencyMinutes: z.number().int().min(1).max(1440).optional(),
+  scannerFrequencyMinutes: z.number().int().min(1).max(60).optional(),
   minVolume24hUsd: z.number().min(0).optional(),
   minMarketCapUsd: z.number().min(0).optional(),
 });
-
-export const SCANNER_CONFIG_ROUTE = "/scanner/config";
 
 export function createScannerConfigRouter(): Router {
   const router = Router();
@@ -48,4 +45,3 @@ export function createScannerConfigRouter(): Router {
 
   return router;
 }
-

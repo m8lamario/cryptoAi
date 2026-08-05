@@ -19,7 +19,7 @@ export const DEFAULT_SCANNER_CONFIG: ScannerConfigData = {
   maxAssetsForQuant: 10,
   maxAssetsForAI: 5,
   minScoreForAI: 60,
-  scannerFrequencyMinutes: 15,
+  scannerFrequencyMinutes: 1,
   minVolume24hUsd: 1_000_000,
   minMarketCapUsd: 10_000_000,
 };
@@ -167,4 +167,3 @@ export async function setAssetConfig(
     maxCapitalUsd: row.maxCapitalUsd?.toNumber() ?? null,
   };
 }
-

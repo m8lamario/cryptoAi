@@ -37,3 +37,22 @@ export {
   computePriceChange,
 } from "./advanced-scanner.js";
 export type { AdvancedMetrics } from "./advanced-scanner.js";
+
+export {
+  rollingZScore,
+  rollingPercentile,
+  clamp,
+} from "./rolling-normalization.js";
+export type { RollingNormalizationConfig } from "./rolling-normalization.js";
+export { estimateTradingCosts, netEdgePercent } from "./cost-model.js";
+export type { CostModelInput, CostEstimate } from "./cost-model.js";
+export {
+  scoreDirectionalBaseline,
+  DIRECTIONAL_FORMULA_VERSION,
+  DIRECTIONAL_FEATURE_VERSION,
+} from "./directional-baseline.js";
+export type {
+  QuantitativeDirection,
+  DirectionalQuantitativeResult,
+  DirectionalBaselineConfig,
+} from "./directional-baseline.js";

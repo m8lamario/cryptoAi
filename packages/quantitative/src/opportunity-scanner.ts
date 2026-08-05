@@ -1,5 +1,5 @@
 import type { IndicatorInput } from "./indicators.js";
-import { ema, rsi, macd, volatility, latestValue } from "./indicators.js";
+import { ema, rsi, macd, atr, volatility, latestValue } from "./indicators.js";
 import type { AdvancedMetrics } from "./advanced-scanner.js";
 import {
   scoreFundingRate,
@@ -35,6 +35,7 @@ export interface OpportunityScanResult {
 export interface ScannerWeights {
   rsi: number;
   macd: number;
+  atr: number;
   volatility: number;
   volume: number;
   trend: number;
@@ -47,14 +48,15 @@ export interface ScannerWeights {
 }
 
 export const DEFAULT_SCANNER_WEIGHTS: ScannerWeights = {
-  rsi: 0.18,
-  macd: 0.18,
-  volatility: 0.12,
+  rsi: 0.16,
+  macd: 0.16,
+  atr: 0.10,
+  volatility: 0.10,
   volume: 0.12,
-  trend: 0.15,
-  breakout: 0.10,
+  trend: 0.14,
+  breakout: 0.08,
   fundingRate: 0.05,
-  openInterest: 0.05,
+  openInterest: 0.04,
   priceChange: 0.05,
   aiTriggerThreshold: 60,
 };
@@ -113,6 +115,11 @@ function _scoreBreakout(candles: IndicatorInput[]): number {
   return Math.min(100, distance * 100);
 }
 
+function _scoreAtr(atrValue: number | null, close: number): number {
+  if (atrValue === null || close <= 0) return 0;
+  return Math.min(100, (atrValue / close / 0.02) * 100);
+}
+
 /**
  * Classify opportunity score.
  * 0-30: IGNORE / 30-60: MONITORING / 60-80: QUANTITATIVE_ANALYSIS / 80-100: AI_ANALYSIS
@@ -131,8 +138,11 @@ function _classify(score: number): OpportunityScanResult["classification"] {
  *
  * Pure function: no IO, no side effects, no randomness.
  *
- * @param advanced Optional futures/sentiment metrics (funding rate, OI).
- *                 Price changes are computed from candles automatically.
+ * @param asset Trading symbol being evaluated.
+ * @param candles Chronological OHLCV candles.
+ * @param weights Optional component-weight overrides.
+ * @param advanced Optional futures metrics.
+ * @returns A deterministic opportunity score and classification.
  */
 export function scanOpportunity(
   asset: string,
@@ -150,6 +160,7 @@ export function scanOpportunity(
   const currentRsi = latestValue(rsi(candles, 14));
   const { macd: macdLine, signal: sigLine, histogram: histLine } = macd(candles, 12, 26, 9);
   const currentVol = latestValue(volatility(candles, 20));
+  const currentAtr = latestValue(atr(candles, 14));
 
   // M2 advanced metrics
   const change1h = computePriceChange(candles, 4);
@@ -157,11 +168,15 @@ export function scanOpportunity(
   const change24h = computePriceChange(candles, 96);
   const pcScore = scorePriceChange({ change1h, change4h: change4h ?? change1h, change24h });
   const frScore = scoreFundingRate(advanced?.fundingRate ?? null);
-  const oiScore = scoreOpenInterest(advanced?.openInterest ?? null);
+  const oiScore = scoreOpenInterest(
+    advanced?.openInterest ?? null,
+    advanced?.openInterestChange24h ?? null,
+  );
 
   const components: OpportunityComponent[] = [
     { name: "RSI", value: _scoreRsi(currentRsi), weight: w.rsi },
     { name: "MACD", value: _scoreMacd(latestValue(macdLine), latestValue(sigLine), latestValue(histLine)), weight: w.macd },
+    { name: "ATR", value: _scoreAtr(currentAtr, candles[candles.length - 1]!.close), weight: w.atr },
     { name: "Volatility", value: _scoreVolatility(currentVol), weight: w.volatility },
     { name: "Volume", value: _scoreVolume(candles), weight: w.volume },
     { name: "Trend", value: _scoreTrend(candles), weight: w.trend },
@@ -191,9 +206,11 @@ export function scanAllAssets(
   weights?: Partial<ScannerWeights>,
   advancedByAsset?: Map<string, Partial<AdvancedMetrics>>,
 ): OpportunityScanResult[] {
-  return assets.map((a) => {
-    const candles = candlesByAsset.get(a.symbol) ?? [];
-    const advanced = advancedByAsset?.get(a.symbol);
-    return scanOpportunity(a.symbol, candles, weights, advanced);
-  });
+  return assets
+    .map((a) => {
+      const candles = candlesByAsset.get(a.symbol) ?? [];
+      const advanced = advancedByAsset?.get(a.symbol);
+      return scanOpportunity(a.symbol, candles, weights, advanced);
+    })
+    .sort((a, b) => b.score - a.score || a.asset.localeCompare(b.asset));
 }

@@ -25,15 +25,15 @@ model User {
 }
 
 model RiskProfile {
-  id                           String   @id @default(cuid())
-  userId                       String   @unique
-  user                         User     @relation(fields: [userId], references: [id])
-  maxPortfolioExposurePercent  Decimal  @db.Decimal(5, 2)
-  maxAssetExposurePercent      Decimal  @db.Decimal(5, 2)
-  maxDailyLossPercent          Decimal  @db.Decimal(5, 2)
-  maxDrawdownPercent           Decimal  @db.Decimal(5, 2)
-  createdAt                    DateTime @default(now())
-  updatedAt                    DateTime @updatedAt
+  id                          String   @id @default(cuid())
+  userId                      String   @unique
+  user                        User     @relation(fields: [userId], references: [id])
+  maxPortfolioExposurePercent Decimal  @db.Decimal(5, 2)
+  maxAssetExposurePercent     Decimal  @db.Decimal(5, 2)
+  maxDailyLossPercent         Decimal  @db.Decimal(5, 2)
+  maxDrawdownPercent          Decimal  @db.Decimal(5, 2)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
 }
 
 model SystemEvent {
@@ -75,19 +75,19 @@ model AuthAuditEvent {
 }
 
 model Asset {
-  id         String   @id @default(cuid())
-  symbol     String   @unique
-  baseAsset  String
-  quoteAsset String
-  name       String
-  active     Boolean  @default(true)
-  isPinned   Boolean  @default(false)
-  isExcluded Boolean  @default(false)
-  maxCapitalUsd Decimal? @db.Decimal(24, 2)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  candles    PriceCandle[]
-  snapshots  MarketSnapshot[]
+  id            String           @id @default(cuid())
+  symbol        String           @unique
+  baseAsset     String
+  quoteAsset    String
+  name          String
+  active        Boolean          @default(true)
+  isPinned      Boolean          @default(false)
+  isExcluded    Boolean          @default(false)
+  maxCapitalUsd Decimal?         @db.Decimal(24, 2)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  candles       PriceCandle[]
+  snapshots     MarketSnapshot[]
 }
 
 model PriceCandle {
@@ -111,15 +111,15 @@ model PriceCandle {
 }
 
 model MarketSnapshot {
-  id              String   @id @default(cuid())
+  id              String             @id @default(cuid())
   assetId         String
-  asset           Asset    @relation(fields: [assetId], references: [id])
-  price           Decimal  @db.Decimal(24, 8)
-  change24h       Decimal? @db.Decimal(12, 4)
-  volume24h       Decimal? @db.Decimal(30, 8)
-  high24h         Decimal? @db.Decimal(24, 8)
-  low24h          Decimal? @db.Decimal(24, 8)
-  collectedAt     DateTime @default(now())
+  asset           Asset              @relation(fields: [assetId], references: [id])
+  price           Decimal            @db.Decimal(24, 8)
+  change24h       Decimal?           @db.Decimal(12, 4)
+  volume24h       Decimal?           @db.Decimal(30, 8)
+  high24h         Decimal?           @db.Decimal(24, 8)
+  low24h          Decimal?           @db.Decimal(24, 8)
+  collectedAt     DateTime           @default(now())
   collectionRunId String?
   collectionRun   DataCollectionRun? @relation(fields: [collectionRunId], references: [id])
 
@@ -148,7 +148,7 @@ model KillSwitch {
 
 model RiskDecision {
   id              String   @id @default(cuid())
-  status          String   // APPROVE | BLOCK
+  status          String // APPROVE | BLOCK
   ruleCode        String
   reason          String
   proposalJson    Json
@@ -164,29 +164,29 @@ model RiskDecision {
 // --- Phase 5: Memory & Evaluation ---
 
 model StoredAgentReport {
-  id              String   @id @default(cuid())
-  runId           String   @unique
-  agentId         String
-  agentVersion    String
-  promptVersion   String
-  requestedModel  String
-  actualModel     String?
-  asset           String
-  horizon         String   // SHORT | MEDIUM | LONG
-  signal          String?  // BUY | SELL | HOLD | WAIT | null
-  score           Decimal  @db.Decimal(4, 2)
-  confidence      Decimal  @db.Decimal(4, 2)
-  dataQuality     Decimal  @db.Decimal(4, 2)
-  reasoning       Json
+  id                 String   @id @default(cuid())
+  runId              String   @unique
+  agentId            String
+  agentVersion       String
+  promptVersion      String
+  requestedModel     String
+  actualModel        String?
+  asset              String
+  horizon            String // SHORT | MEDIUM | LONG
+  signal             String? // BUY | SELL | HOLD | WAIT | null
+  score              Decimal  @db.Decimal(4, 2)
+  confidence         Decimal  @db.Decimal(4, 2)
+  dataQuality        Decimal  @db.Decimal(4, 2)
+  reasoning          Json
   supportingEvidence Json
   opposingEvidence   Json
-  sourceIds       String[]
-  promptTokens    Int
-  completionTokens Int
-  latencyMs       Int
-  estimatedCostUsd Decimal @db.Decimal(12, 6)
-  status          String   // VALID | UNAVAILABLE | INVALID
-  createdAt       DateTime @default(now())
+  sourceIds          String[]
+  promptTokens       Int
+  completionTokens   Int
+  latencyMs          Int
+  estimatedCostUsd   Decimal  @db.Decimal(12, 6)
+  status             String // VALID | UNAVAILABLE | INVALID
+  createdAt          DateTime @default(now())
 
   @@index([agentId, createdAt])
   @@index([asset, createdAt])
@@ -194,28 +194,28 @@ model StoredAgentReport {
 }
 
 model StoredTradeProposal {
-  id                    String   @id @default(cuid())
-  runId                 String   @unique
-  asset                 String
-  action                String?  // BUY | SELL | HOLD | WAIT | null
-  confidence            Decimal  @db.Decimal(4, 2)
-  suggestedRiskFraction Decimal? @db.Decimal(4, 2)
-  rationale             Json
-  reportIds             String[]
+  id                     String    @id @default(cuid())
+  runId                  String    @unique
+  asset                  String
+  action                 String? // BUY | SELL | HOLD | WAIT | null
+  confidence             Decimal   @db.Decimal(4, 2)
+  suggestedRiskFraction  Decimal?  @db.Decimal(4, 2)
+  rationale              Json
+  reportIds              String[]
   invalidationConditions Json
-  expiresAt             DateTime?
-  status                String   // VALID | NO_ACTION | UNAVAILABLE | INVALID | AMBIGUOUS
-  decisionGateResult    String?  // APPROVE | BLOCK | MANUAL_REVIEW (if processed)
-  riskDecisionId        String?  // FK to RiskDecision if one was produced
-  managerAgentVersion   String
-  managerPromptVersion  String
-  requestedModel        String
-  actualModel           String?
-  promptTokens          Int
-  completionTokens      Int
-  latencyMs             Int
-  estimatedCostUsd      Decimal  @db.Decimal(12, 6)
-  createdAt             DateTime @default(now())
+  expiresAt              DateTime?
+  status                 String // VALID | NO_ACTION | UNAVAILABLE | INVALID | AMBIGUOUS
+  decisionGateResult     String? // APPROVE | BLOCK | MANUAL_REVIEW (if processed)
+  riskDecisionId         String? // FK to RiskDecision if one was produced
+  managerAgentVersion    String
+  managerPromptVersion   String
+  requestedModel         String
+  actualModel            String?
+  promptTokens           Int
+  completionTokens       Int
+  latencyMs              Int
+  estimatedCostUsd       Decimal   @db.Decimal(12, 6)
+  createdAt              DateTime  @default(now())
 
   @@index([asset, createdAt])
   @@index([status, createdAt])
@@ -225,32 +225,32 @@ model StoredTradeProposal {
 // --- Phase 7: Paper Trading & Backtesting ---
 
 model PaperBalance {
-  id          String   @id @default(cuid())
+  id           String   @id @default(cuid())
   singletonKey String   @unique @default("PAPER")
-  quote       Decimal  @db.Decimal(24, 2) // USDT balance
-  peakValue   Decimal  @db.Decimal(24, 2)
-  dailyPnl    Decimal  @db.Decimal(24, 2)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  quote        Decimal  @db.Decimal(24, 2) // USDT balance
+  peakValue    Decimal  @db.Decimal(24, 2)
+  dailyPnl     Decimal  @db.Decimal(24, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model PaperOrder {
-  id              String   @id @default(cuid())
-  orderId         String   @unique
-  executionKey    String?  @unique
+  id              String    @id @default(cuid())
+  orderId         String    @unique
+  executionKey    String?   @unique
   asset           String
-  side            String   // BUY | SELL
-  type            String   // MARKET | LIMIT
-  quantity        Decimal  @db.Decimal(24, 8)
-  price           Decimal  @db.Decimal(24, 8)
-  commission      Decimal  @db.Decimal(24, 8)
-  slippagePercent Decimal  @db.Decimal(8, 4)
-  status          String   // PENDING | FILLED | CANCELLED | REJECTED
+  side            String // BUY | SELL
+  type            String // MARKET | LIMIT
+  quantity        Decimal   @db.Decimal(24, 8)
+  price           Decimal   @db.Decimal(24, 8)
+  commission      Decimal   @db.Decimal(24, 8)
+  slippagePercent Decimal   @db.Decimal(8, 4)
+  status          String // PENDING | FILLED | CANCELLED | REJECTED
   proposalRunId   String?
   riskDecisionId  String?
   backtestRunId   String?
   executedAt      DateTime?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
 
   @@index([asset, createdAt])
   @@index([status, createdAt])
@@ -258,44 +258,44 @@ model PaperOrder {
 }
 
 model PaperPosition {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   asset         String
-  side          String   // LONG | SHORT
-  quantity      Decimal  @db.Decimal(24, 8)
-  entryPrice    Decimal  @db.Decimal(24, 8)
-  currentPrice  Decimal  @db.Decimal(24, 8)
-  unrealizedPnl Decimal  @db.Decimal(24, 8)
-  stopLoss      Decimal? @db.Decimal(24, 8)
-  takeProfit    Decimal? @db.Decimal(24, 8)
-  openedAt      DateTime @default(now())
+  side          String // LONG | SHORT
+  quantity      Decimal   @db.Decimal(24, 8)
+  entryPrice    Decimal   @db.Decimal(24, 8)
+  currentPrice  Decimal   @db.Decimal(24, 8)
+  unrealizedPnl Decimal   @db.Decimal(24, 8)
+  stopLoss      Decimal?  @db.Decimal(24, 8)
+  takeProfit    Decimal?  @db.Decimal(24, 8)
+  openedAt      DateTime  @default(now())
   closedAt      DateTime?
-  status        String   @default("OPEN") // OPEN | CLOSED
+  status        String    @default("OPEN") // OPEN | CLOSED
 
   @@index([asset])
   @@index([status])
 }
 
 model BacktestRun {
-  id            String   @id @default(cuid())
-  strategy      String   // BUY_AND_HOLD | QUANTITATIVE | HYBRID_AI
-  asset         String
-  startDate     DateTime
-  endDate       DateTime
-  initialQuote  Decimal  @db.Decimal(24, 2)
-  finalQuote    Decimal  @db.Decimal(24, 2)
-  totalReturn   Decimal  @db.Decimal(8, 4)
-  maxDrawdown   Decimal  @db.Decimal(8, 4)
-  sharpeRatio   Decimal? @db.Decimal(8, 4)
-  sortinoRatio  Decimal? @db.Decimal(8, 4)
-  totalTrades   Int
-  winRate       Decimal? @db.Decimal(6, 4)
-  avgProfit     Decimal? @db.Decimal(24, 8)
-  avgLoss       Decimal? @db.Decimal(24, 8)
-  commissionCost    Decimal  @db.Decimal(24, 8)
-  slippageCost      Decimal  @db.Decimal(24, 8)
-  aiCostUsd         Decimal  @db.Decimal(12, 6)
-  metadata      Json?
-  createdAt     DateTime @default(now())
+  id             String   @id @default(cuid())
+  strategy       String // BUY_AND_HOLD | QUANTITATIVE | HYBRID_AI
+  asset          String
+  startDate      DateTime
+  endDate        DateTime
+  initialQuote   Decimal  @db.Decimal(24, 2)
+  finalQuote     Decimal  @db.Decimal(24, 2)
+  totalReturn    Decimal  @db.Decimal(8, 4)
+  maxDrawdown    Decimal  @db.Decimal(8, 4)
+  sharpeRatio    Decimal? @db.Decimal(8, 4)
+  sortinoRatio   Decimal? @db.Decimal(8, 4)
+  totalTrades    Int
+  winRate        Decimal? @db.Decimal(6, 4)
+  avgProfit      Decimal? @db.Decimal(24, 8)
+  avgLoss        Decimal? @db.Decimal(24, 8)
+  commissionCost Decimal  @db.Decimal(24, 8)
+  slippageCost   Decimal  @db.Decimal(24, 8)
+  aiCostUsd      Decimal  @db.Decimal(12, 6)
+  metadata       Json?
+  createdAt      DateTime @default(now())
 
   @@index([strategy, createdAt])
   @@index([asset, createdAt])
@@ -304,51 +304,64 @@ model BacktestRun {
 // --- v1.4: Trading Plan & Dashboard 2.0 ---
 
 model TradingPlan {
-  id                  String   @id @default(cuid())
-  proposalRunId       String   @unique
-  strategy            String   // SCALPING | INTRADAY | SWING | POSITION
-  expectedDuration    String
-  expectedProfitPercent Decimal @db.Decimal(8, 4)
-  expectedRiskPercent Decimal @db.Decimal(8, 4)
-  confidence          Decimal  @db.Decimal(4, 2)
-  suggestedEntry      Decimal  @db.Decimal(24, 8)
-  suggestedTakeProfit Decimal  @db.Decimal(24, 8)
-  suggestedStopLoss   Decimal  @db.Decimal(24, 8)
-  urgency             String   // LOW | MEDIUM | HIGH
-  reasons             Json
-  createdAt           DateTime @default(now())
+  id                    String   @id @default(cuid())
+  proposalRunId         String   @unique
+  strategy              String // SCALPING | INTRADAY | SWING | POSITION
+  expectedDuration      String
+  expectedProfitPercent Decimal  @db.Decimal(8, 4)
+  expectedRiskPercent   Decimal  @db.Decimal(8, 4)
+  confidence            Decimal  @db.Decimal(4, 2)
+  suggestedEntry        Decimal  @db.Decimal(24, 8)
+  suggestedTakeProfit   Decimal  @db.Decimal(24, 8)
+  suggestedStopLoss     Decimal  @db.Decimal(24, 8)
+  urgency               String // LOW | MEDIUM | HIGH
+  reasons               Json
+  createdAt             DateTime @default(now())
 
   @@index([proposalRunId])
 }
 
 model MarketOpportunityScore {
-  id              String   @id @default(cuid())
-  asset           String
-  score           Int      // 0-100
-  classification  String   // IGNORE | MONITORING | AI_ANALYSIS | MAX_PRIORITY
-  components      Json     // [{name, value, weight}, ...]
-  evaluatedAt     DateTime @default(now())
+  id                   String   @id @default(cuid())
+  asset                String
+  score                Int // 0-100 legacy opportunity intensity
+  classification       String // IGNORE | MONITORING | QUANTITATIVE_ANALYSIS | AI_ANALYSIS | MAX_PRIORITY
+  components           Json
+  direction            String?
+  opportunityIntensity Float?
+  directionScore       Float?
+  expectedMove         Float?
+  expectedRisk         Float?
+  estimatedCosts       Json?
+  netEdge              Float?
+  horizonCandles       Int?
+  formulaVersion       String?
+  featureVersion       String?
+  features             Json?
+  evaluatedAt          DateTime @default(now())
 
+  @@unique([asset, evaluatedAt])
   @@index([asset, evaluatedAt])
   @@index([evaluatedAt])
+  @@index([netEdge, evaluatedAt])
 }
 
 model AIDecisionMemory {
-  id                    String   @id @default(cuid())
-  proposalRunId         String   @unique
-  asset                 String
-  action                String   // BUY | SELL
-  strategy              String?  // SCALPING | INTRADAY | SWING | POSITION
-  entryPrice            Decimal  @db.Decimal(24, 8)
-  indicatorsJson        Json
-  modelUsed             String
-  promptVersion         String
-  confidenceAtDecision  Decimal  @db.Decimal(4, 2)
-  decidedAt             DateTime
-  outcomes              Json     // [MemoryOutcome]
-  finalResult           Decimal? @db.Decimal(8, 4)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  proposalRunId        String   @unique
+  asset                String
+  action               String // BUY | SELL
+  strategy             String? // SCALPING | INTRADAY | SWING | POSITION
+  entryPrice           Decimal  @db.Decimal(24, 8)
+  indicatorsJson       Json
+  modelUsed            String
+  promptVersion        String
+  confidenceAtDecision Decimal  @db.Decimal(4, 2)
+  decidedAt            DateTime
+  outcomes             Json // [MemoryOutcome]
+  finalResult          Decimal? @db.Decimal(8, 4)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@index([asset, decidedAt])
   @@index([modelUsed, createdAt])
@@ -356,10 +369,10 @@ model AIDecisionMemory {
 }
 
 model OperatingModeConfig {
-  id                  String   @id @default(cuid())
-  mode                String   @default("PAPER") // PAPER | ASSISTED | AUTONOMOUS
-  autoApprovalRules   Json     // AutoApprovalRule[]
-  updatedAt           DateTime @updatedAt
+  id                String   @id @default(cuid())
+  mode              String   @default("PAPER") // PAPER | ASSISTED | AUTONOMOUS
+  autoApprovalRules Json // AutoApprovalRule[]
+  updatedAt         DateTime @updatedAt
 }
 
 model EquitySnapshot {
@@ -373,13 +386,91 @@ model EquitySnapshot {
 // --- v1.5: Market Scanner Configuration ---
 
 model ScannerConfig {
-  id                     String   @id @default(cuid())
-  maxAssetsToScan        Int      @default(100)
-  maxAssetsForQuant      Int      @default(10)
-  maxAssetsForAI         Int      @default(5)
-  minScoreForAI          Int      @default(60)  // 0-100
-  scannerFrequencyMinutes Int     @default(15)
-  minVolume24hUsd        Decimal  @db.Decimal(20, 2) @default(1000000)
-  minMarketCapUsd        Decimal  @db.Decimal(20, 2) @default(10000000)
-  updatedAt              DateTime @updatedAt
+  id                      String   @id @default(cuid())
+  maxAssetsToScan         Int      @default(100)
+  maxAssetsForQuant       Int      @default(10)
+  maxAssetsForAI          Int      @default(5)
+  minScoreForAI           Int      @default(60) // 0-100
+  scannerFrequencyMinutes Int      @default(1) // scheduler runs every 60 seconds; retained for UI compatibility
+  minVolume24hUsd         Decimal  @default(1000000) @db.Decimal(20, 2)
+  minMarketCapUsd         Decimal  @default(10000000) @db.Decimal(20, 2)
+  updatedAt               DateTime @updatedAt
+}
+
+model ConfigurationSnapshot {
+  id            String   @id @default(cuid())
+  kind          String
+  version       String
+  payload       Json
+  payloadHash   String
+  effectiveFrom DateTime @default(now())
+  createdBy     String   @default("SYSTEM")
+  createdAt     DateTime @default(now())
+
+  @@unique([kind, version])
+  @@unique([kind, payloadHash])
+  @@index([kind, createdAt])
+}
+
+model DecisionAudit {
+  id                       String   @id @default(cuid())
+  decisionKey              String   @unique
+  proposalRunId            String?
+  asset                    String
+  action                   String?
+  decisionStatus           String
+  marketInput              Json
+  quantitativeFeatures     Json
+  agentReportIds           String[]
+  proposalJson             Json
+  decisionGateResult       String?
+  riskDecisionId           String?
+  orderId                  String?
+  configurationSnapshotIds String[]
+  promptVersion            String?
+  requestedModel           String?
+  actualModel              String?
+  outcomeStatus            String   @default("PENDING")
+  migrationSafe            Boolean  @default(true)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([asset, createdAt])
+  @@index([outcomeStatus, createdAt])
+}
+
+model OutcomeLedger {
+  id              String   @id @default(cuid())
+  decisionAuditId String
+  proposalRunId   String?
+  orderId         String?
+  checkpoint      String
+  referencePrice  Decimal? @db.Decimal(24, 8)
+  entryPrice      Decimal? @db.Decimal(24, 8)
+  exitPrice       Decimal? @db.Decimal(24, 8)
+  realizedPnl     Decimal  @default(0) @db.Decimal(24, 8)
+  unrealizedPnl   Decimal  @default(0) @db.Decimal(24, 8)
+  grossPnl        Decimal  @default(0) @db.Decimal(24, 8)
+  fee             Decimal  @default(0) @db.Decimal(24, 8)
+  slippage        Decimal  @default(0) @db.Decimal(24, 8)
+  netPnl          Decimal  @default(0) @db.Decimal(24, 8)
+  wasCorrect      Boolean?
+  recordedAt      DateTime @default(now())
+
+  @@unique([decisionAuditId, checkpoint])
+  @@index([proposalRunId, recordedAt])
+  @@index([checkpoint, recordedAt])
+}
+
+model PerformanceSnapshot {
+  id                 String   @id @default(cuid())
+  realizedPnl        Decimal  @default(0) @db.Decimal(24, 8)
+  unrealizedPnl      Decimal  @default(0) @db.Decimal(24, 8)
+  dailyRealizedPnl   Decimal  @default(0) @db.Decimal(24, 8)
+  dailyUnrealizedPnl Decimal  @default(0) @db.Decimal(24, 8)
+  cumulativeNetPnl   Decimal  @default(0) @db.Decimal(24, 8)
+  equity             Decimal  @default(0) @db.Decimal(24, 8)
+  recordedAt         DateTime @default(now())
+
+  @@index([recordedAt])
 }

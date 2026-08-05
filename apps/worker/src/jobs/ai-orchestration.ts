@@ -37,6 +37,11 @@ import {
   getPaperPortfolio,
 } from "@cryptoai/paper-executor";
 import { storeAgentReport, storeTradeProposal } from "@cryptoai/database";
+import {
+  hashConfigurationPayload,
+  upsertConfigurationSnapshot,
+  upsertDecisionAudit,
+} from "@cryptoai/database";
 import { logger } from "../logger.js";
 import {
   createConfiguredNotificationSender,
@@ -247,10 +252,13 @@ export async function runAIOrchestration(
   logger.info("Starting AI orchestration cycle");
 
   let config: RunConfig;
+  let configurationBundle: M0ConfigurationBundle;
   try {
     config = buildConfig();
+    configurationBundle = await createM0ConfigurationBundle(config, job.data.models);
+    logger.info({ snapshotCount: configurationBundle.ids.length, migrationSafe: configurationBundle.migrationSafe }, "M0 configuration bundle ready");
   } catch (err) {
-    logger.error({ err }, "Failed to build AI config");
+    logger.error({ err }, "Failed to build AI config or M0 configuration bundle");
     return {
       status: "failed",
       assetsProcessed: 0,
@@ -260,7 +268,7 @@ export async function runAIOrchestration(
       decisionsMade: 0,
       ordersExecuted: 0,
       totalAiCostUsd: 0,
-      error: err instanceof Error ? err.message : "Config error",
+      error: "M0 configuration snapshot unavailable",
     };
   }
 
@@ -578,6 +586,36 @@ export async function runAIOrchestration(
         }));
 
         const gateResult = evaluateDecisionGate(proposal, dgReports, config.decisionGateConfig);
+        try {
+          await upsertDecisionAudit({
+            decisionKey: managerReport.runId,
+            proposalRunId: managerReport.runId,
+            asset: assetData.symbol,
+            action: proposal.action,
+            decisionStatus: gateResult.decision,
+            marketInput: {
+              symbol: assetData.symbol,
+              price: assetData.currentPrice,
+              change24h: assetData.change24h,
+              recentCandles,
+            },
+            quantitativeFeatures: indicators,
+            agentReportIds: results.map((result) => result.report.runId),
+            proposalJson: proposal as unknown as Record<string, unknown>,
+            decisionGateResult: gateResult.decision,
+            riskDecisionId: null,
+            orderId: null,
+            configurationSnapshotIds: configurationBundle.ids,
+            promptVersion: managerReport.promptVersion,
+            requestedModel: managerReport.requestedModel,
+            actualModel: managerReport.actualModel,
+            outcomeStatus: gateResult.decision === "APPROVE" ? "PENDING" : "NO_ACTION",
+            migrationSafe: configurationBundle.migrationSafe,
+          });
+        } catch (err) {
+          logger.error({ err, asset: assetData.symbol }, "Failed to persist decision audit; skipping execution");
+          continue;
+        }
 
         if (gateResult.decision === "APPROVE") {
           const portfolio = await getPaperPortfolio();
@@ -627,6 +665,34 @@ export async function runAIOrchestration(
           await prisma.storedTradeProposal.update({
             where: { runId: managerReport.runId },
             data: { decisionGateResult: "APPROVE", riskDecisionId: persistedRiskDecision.id },
+          });
+          await upsertDecisionAudit({
+            decisionKey: managerReport.runId,
+            proposalRunId: managerReport.runId,
+            asset: assetData.symbol,
+            action: proposal.action,
+            decisionStatus: riskDecision.status,
+            marketInput: {
+              symbol: assetData.symbol,
+              price: assetData.currentPrice,
+              change24h: assetData.change24h,
+              recentCandles,
+            },
+            quantitativeFeatures: {
+              ...indicators,
+              portfolio: portfolioSnapshot,
+              riskRule: riskDecision.ruleCode,
+            },
+            agentReportIds: results.map((result) => result.report.runId),
+            proposalJson: proposal as unknown as Record<string, unknown>,
+            decisionGateResult: gateResult.decision,
+            riskDecisionId: persistedRiskDecision.id,
+            configurationSnapshotIds: configurationBundle.ids,
+            promptVersion: managerReport.promptVersion,
+            requestedModel: managerReport.requestedModel,
+            actualModel: managerReport.actualModel,
+            outcomeStatus: riskDecision.status === "APPROVE" ? "PENDING" : "BLOCKED",
+            migrationSafe: configurationBundle.migrationSafe,
           });
           totalDecisions++;
 
@@ -726,4 +792,73 @@ export async function runAIOrchestration(
     ordersExecuted: totalOrders,
     totalAiCostUsd: Math.round(totalAiCost * 1_000_000) / 1_000_000,
   };
+}
+
+interface M0ConfigurationBundle {
+  ids: string[];
+  migrationSafe: boolean;
+}
+
+async function createM0ConfigurationBundle(
+  config: RunConfig,
+  modelOverrides?: Partial<Record<string, string>>,
+): Promise<M0ConfigurationBundle> {
+  const scanner = await prisma.scannerConfig.findFirst({ orderBy: { updatedAt: "desc" } });
+  const risk = config.riskProfile;
+  const feePayload = {
+    commissionRate: config.commissionRate,
+    slippagePercent: config.slippagePercent,
+    minPositionSize: config.minPositionSize,
+  };
+  const aiPayload = {
+    requestedModels: modelOverrides ?? {},
+    defaultModel: process.env["OPENROUTER_DEFAULT_MODEL"] ?? "deepseek/deepseek-v4-flash",
+    dailyBudgetUsd: parseFloatEnv("AI_DAILY_BUDGET_USD", 1.0),
+    monthlyBudgetUsd: parseFloatEnv("AI_MONTHLY_BUDGET_USD", 20.0),
+    defaultTemperature: parseFloatEnv("AI_DEFAULT_TEMPERATURE", 0.3),
+    defaultMaxTokens: Number.parseInt(readEnv("AI_DEFAULT_MAX_TOKENS", "1500"), 10),
+    timeoutMs: Number.parseInt(readEnv("AI_DEFAULT_TIMEOUT_MS", "60000"), 10),
+    maxRetries: Number.parseInt(readEnv("AI_DEFAULT_MAX_RETRIES", "2"), 10),
+  };
+  const snapshots = await Promise.all([
+    upsertConfigurationSnapshot({
+      kind: "SCANNER",
+      version: `scanner-${scanner?.updatedAt.toISOString() ?? "defaults"}`,
+      payload: scanner ? {
+        maxAssetsToScan: scanner.maxAssetsToScan,
+        maxAssetsForQuant: scanner.maxAssetsForQuant,
+        maxAssetsForAI: scanner.maxAssetsForAI,
+        minScoreForAI: scanner.minScoreForAI,
+        scannerFrequencyMinutes: scanner.scannerFrequencyMinutes,
+        minVolume24hUsd: Number(scanner.minVolume24hUsd),
+        minMarketCapUsd: Number(scanner.minMarketCapUsd),
+      } : { source: "runtime-defaults" },
+    }),
+    upsertConfigurationSnapshot({
+      kind: "RISK",
+      version: `runtime-risk-${hashConfigurationPayload(risk as unknown as Record<string, unknown>).slice(0, 16)}`,
+      payload: risk as unknown as Record<string, unknown>,
+    }),
+    upsertConfigurationSnapshot({
+      kind: "AI",
+      version: `runtime-ai-${hashConfigurationPayload(aiPayload).slice(0, 16)}`,
+      payload: aiPayload,
+    }),
+    upsertConfigurationSnapshot({
+      kind: "FEE",
+      version: `runtime-fee-${hashConfigurationPayload(feePayload).slice(0, 16)}`,
+      payload: feePayload,
+    }),
+    upsertConfigurationSnapshot({
+      kind: "EXECUTION",
+      version: "paper-execution-v1",
+      payload: { initialBalance: 10000, migrationSafe: true },
+    }),
+    upsertConfigurationSnapshot({
+      kind: "SYSTEM",
+      version: "migration-safe-v1",
+      payload: { mode: "PAPER", migrationSafe: true, tradingReal: false },
+    }),
+  ]);
+  return { ids: snapshots.map((snapshot) => snapshot.id), migrationSafe: true };
 }

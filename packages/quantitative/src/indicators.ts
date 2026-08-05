@@ -72,7 +72,7 @@ export function ema(candles: IndicatorInput[], period: number): (number | null)[
 export function rsi(candles: IndicatorInput[], period: number = 14): (number | null)[] {
   if (period <= 0 || candles.length < period + 1) return candles.map(() => null);
 
-  const result: (number | null)[] = [];
+  const result: (number | null)[] = candles.map(() => null);
   const gains: number[] = [];
   const losses: number[] = [];
 
@@ -82,30 +82,20 @@ export function rsi(candles: IndicatorInput[], period: number = 14): (number | n
     losses.push(change < 0 ? -change : 0);
   }
 
-  // First RSI value uses simple average
   let avgGain = gains.slice(0, period).reduce((a, b) => a + b, 0) / period;
   let avgLoss = losses.slice(0, period).reduce((a, b) => a + b, 0) / period;
 
-  // Before we have enough data, return null
-  for (let i = 0; i < period; i++) {
-    result.push(null);
-  }
+  for (let changeIndex = period - 1; changeIndex < gains.length; changeIndex++) {
+    const candleIndex = changeIndex + 1;
+    result[candleIndex] = avgLoss === 0
+      ? 100
+      : 100 - 100 / (1 + avgGain / avgLoss);
 
-  for (let i = period; i < gains.length; i++) {
-    if (avgLoss === 0) {
-      result.push(100);
-    } else {
-      const rs = avgGain / avgLoss;
-      result.push(100 - 100 / (1 + rs));
+    if (changeIndex + 1 < gains.length) {
+      avgGain = (avgGain * (period - 1) + gains[changeIndex + 1]!) / period;
+      avgLoss = (avgLoss * (period - 1) + losses[changeIndex + 1]!) / period;
     }
-
-    // Wilder's smoothing
-    avgGain = (avgGain * (period - 1) + gains[i]!) / period;
-    avgLoss = (avgLoss * (period - 1) + losses[i]!) / period;
   }
-
-  // Push one more null for the last candle (RSI is shifted by 1 vs gains array)
-  result.push(null);
 
   return result;
 }
@@ -194,29 +184,16 @@ export function atr(candles: IndicatorInput[], period: number = 14): (number | n
     const high = candles[i]!.high;
     const low = candles[i]!.low;
     const prevClose = candles[i - 1]!.close;
-    const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
-    trueRanges.push(tr);
+    trueRanges.push(Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose)));
   }
 
-  const result: (number | null)[] = [];
-  // First value is null (no previous candle for TR)
-  result.push(null);
-
-  // Initial ATR is simple average
+  const result: (number | null)[] = candles.map(() => null);
   let atrValue = trueRanges.slice(0, period).reduce((a, b) => a + b, 0) / period;
-
-  for (let i = 0; i < Math.min(period, trueRanges.length); i++) {
-    result.push(null);
-  }
+  result[period] = atrValue;
 
   for (let i = period; i < trueRanges.length; i++) {
     atrValue = (atrValue * (period - 1) + trueRanges[i]!) / period;
-    result.push(atrValue);
-  }
-
-  // Pad to match candle length
-  while (result.length < candles.length) {
-    result.push(null);
+    result[i + 1] = atrValue;
   }
 
   return result;

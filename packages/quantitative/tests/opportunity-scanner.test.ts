@@ -1,11 +1,6 @@
 import { describe, it, expect } from "vitest";
-import {
-  scanOpportunity,
-  scanAllAssets,
-  DEFAULT_SCANNER_WEIGHTS,
-} from "../src/opportunity-scanner.js";
+import { scanOpportunity, scanAllAssets } from "../src/opportunity-scanner.js";
 import type { IndicatorInput } from "../src/indicators.js";
-import { IndicatorInputSchema } from "../src/indicators.js";
 
 /**
  * Generate synthetic candles for testing.
@@ -23,14 +18,12 @@ function generateCandles(
     const close = price + change;
     const high = close + Math.random() * volatility * price * 0.5;
     const low = close - Math.random() * volatility * price * 0.5;
-    const open = price;
     const volume = 100 + Math.random() * 50;
     candles.push({
       openTime: i * 900_000,
       close,
       high,
       low,
-      open,
       volume,
     });
     price = close;
@@ -54,10 +47,10 @@ describe("scanOpportunity", () => {
     expect(result.classification).toBeDefined();
   });
 
-  it("returns all 9 components (M2)", () => {
+  it("returns all 10 components (M2)", () => {
     const candles = generateCandles(60, 65000, 0.02);
     const result = scanOpportunity("BTCUSDT", candles);
-    expect(result.components).toHaveLength(9);
+    expect(result.components).toHaveLength(10);
     const names = result.components.map((c) => c.name);
     expect(names).toContain("RSI");
     expect(names).toContain("MACD");
@@ -68,6 +61,7 @@ describe("scanOpportunity", () => {
     expect(names).toContain("Funding Rate");
     expect(names).toContain("Open Interest");
     expect(names).toContain("Price Change");
+    expect(names).toContain("ATR");
   });
 
   it("each component has value 0-100 and weight 0-1", () => {
@@ -118,7 +112,9 @@ describe("scanOpportunity", () => {
     ]);
     const results = scanAllAssets(assets, map);
     expect(results).toHaveLength(2);
-    expect(results[0]!.asset).toBe("BTCUSDT");
-    expect(results[1]!.asset).toBe("ETHUSDT");
+    expect(results[0]!.score).toBeGreaterThanOrEqual(results[1]!.score);
+    expect(results.map((result) => result.asset)).toEqual(
+      expect.arrayContaining(["BTCUSDT", "ETHUSDT"]),
+    );
   });
 });

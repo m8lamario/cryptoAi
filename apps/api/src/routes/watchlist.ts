@@ -2,7 +2,6 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { getActiveAssets, getAssetConfig, setAssetConfig } from "@cryptoai/database";
-import type { AssetConfigData } from "@cryptoai/database";
 import { logger } from "../logger.js";
 
 const AssetPatchSchema = z.object({
@@ -10,8 +9,6 @@ const AssetPatchSchema = z.object({
   isExcluded: z.boolean().optional(),
   maxCapitalUsd: z.number().min(0).nullable().optional(),
 });
-
-export const WATCHLIST_ROUTE = "/watchlist";
 
 export function createWatchlistRouter(): Router {
   const router = Router();

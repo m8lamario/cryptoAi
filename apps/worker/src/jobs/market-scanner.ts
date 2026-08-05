@@ -3,18 +3,26 @@ import { prisma } from "@cryptoai/database";
 import { assetRegistry, fetchFuturesMetrics } from "@cryptoai/market-data";
 import {
   scanAllAssets,
+  scoreDirectionalBaseline,
   DEFAULT_SCANNER_WEIGHTS,
   filterByLiquidity,
 } from "@cryptoai/quantitative";
 import type {
   IndicatorInput,
   LiquidityInput,
-  ScannerWeights,
   AdvancedMetrics,
 } from "@cryptoai/quantitative";
 import { storeOpportunityScore, getScannerConfig } from "@cryptoai/database";
 import { logger } from "../logger.js";
 import { createConfiguredNotificationSender } from "../notifications.js";
+
+const SNAPSHOT_MAX_AGE_MS = 30 * 60_000;
+const CANDLE_MAX_AGE_MS = 30 * 60_000;
+
+function isFresh(timestamp: Date, maxAgeMs: number, now: number): boolean {
+  const age = now - timestamp.getTime();
+  return age >= 0 && age <= maxAgeMs;
+}
 
 // --- Job Types ---
 
@@ -57,8 +65,11 @@ export async function runMarketScanner(
     job.data.aiTriggerThreshold ?? config?.minScoreForAI ?? DEFAULT_SCANNER_WEIGHTS.aiTriggerThreshold;
 
   try {
-    const assets = assetRegistry.getActiveAssets();
+    const assets = assetRegistry
+      .getActiveAssets()
+      .slice(0, config?.maxAssetsToScan ?? 100);
     const symbols = assets.map((a) => a.symbol);
+    const now = Date.now();
 
     // --- 1. Load tickers for liquidity filter ---
     const snapshots = await prisma.marketSnapshot.findMany({
@@ -70,12 +81,14 @@ export async function runMarketScanner(
       include: { asset: { select: { symbol: true } } },
     });
 
-    const liquidityInputs: LiquidityInput[] = snapshots.map((s) => ({
-      symbol: s.asset.symbol,
-      volume24hUsd: s.volume24h?.toNumber() ?? 0,
-      marketCapUsd: null, // not available from ticker data
-      price: s.price.toNumber(),
-    }));
+    const liquidityInputs: LiquidityInput[] = snapshots
+      .filter((s) => isFresh(s.collectedAt, SNAPSHOT_MAX_AGE_MS, now))
+      .map((s) => ({
+        symbol: s.asset.symbol,
+        volume24hUsd: s.volume24h?.toNumber() ?? 0,
+        marketCapUsd: null, // not available from ticker data
+        price: s.price.toNumber(),
+      }));
 
     // --- 2. Liquidity filter ---
     const liquidSymbols = filterByLiquidity(liquidityInputs, {
@@ -101,12 +114,20 @@ export async function runMarketScanner(
     for (const symbol of liquidSymbols) {
       const stored = await prisma.priceCandle.findMany({
         where: { asset: { symbol }, interval: "15m" },
-        orderBy: { openTime: "asc" },
+        orderBy: { openTime: "desc" },
         take: 100,
       });
+      const chronological = stored
+        .filter((c) => Number.isFinite(c.close.toNumber()) && c.close.gt(0))
+        .reverse();
+      const latestCandle = chronological[chronological.length - 1];
+      if (!latestCandle || !isFresh(latestCandle.openTime, CANDLE_MAX_AGE_MS, now)) {
+        candlesByAsset.set(symbol, []);
+        continue;
+      }
       candlesByAsset.set(
         symbol,
-        stored.map((c) => ({
+        chronological.map((c) => ({
           openTime: c.openTime.getTime(),
           close: c.close.toNumber(),
           high: c.high.toNumber(),
@@ -125,31 +146,57 @@ export async function runMarketScanner(
         symbol: s,
         fundingRate: fm?.fundingRate ?? null,
         openInterest: fm?.openInterest ?? null,
+        openInterestChange24h: fm?.openInterestChange24h ?? null,
         priceChange1h: null, // computed from candles
         priceChange4h: null,
         priceChange24h: null,
       });
     }
 
-    // --- 5. Scan with advanced metrics ---
+    // --- 5. M3 directional, cost-aware baseline ---
     const assetList = assets
       .filter((a) => liquidSymbols.includes(a.symbol))
       .map((a) => ({ symbol: a.symbol }));
-    const results = scanAllAssets(assetList, candlesByAsset, undefined, advancedByAsset);
+    const quantitativeLimit = config?.maxAssetsForQuant ?? 10;
+    const rankedResults = scanAllAssets(assetList, candlesByAsset, undefined, advancedByAsset);
+    const quantitativeResults = rankedResults
+      .map((result) => {
+        const baseline = scoreDirectionalBaseline(
+          result.asset,
+          candlesByAsset.get(result.asset) ?? [],
+        );
+        return { result, baseline };
+      })
+      .sort((left, right) => right.baseline.netEdge - left.baseline.netEdge || right.result.score - left.result.score)
+      .slice(0, quantitativeLimit);
+    const results = rankedResults;
 
     // --- 6. Persist scores ---
-    for (const result of results) {
+    for (const { result, baseline } of quantitativeResults) {
       try {
-        await storeOpportunityScore(result);
+        await storeOpportunityScore({
+          ...result,
+          direction: baseline.direction,
+          opportunityIntensity: baseline.opportunityIntensity,
+          directionScore: baseline.directionScore,
+          expectedMove: baseline.expectedMove,
+          expectedRisk: baseline.expectedRisk,
+          estimatedCosts: baseline.estimatedCosts,
+          netEdge: baseline.netEdge,
+          horizonCandles: baseline.horizonCandles,
+          formulaVersion: baseline.formulaVersion,
+          featureVersion: baseline.featureVersion,
+          features: baseline.features,
+        });
       } catch (err) {
-        logger.warn({ asset: result.asset, err }, "Failed to persist opportunity score");
+        logger.warn({ asset: result.asset, err }, "Failed to persist M3 opportunity score");
       }
     }
 
     // --- 7. Trigger candidates ---
-    const triggeredAssets = results
-      .filter((r) => r.score >= threshold)
-      .map((r) => r.asset);
+    const triggeredAssets = quantitativeResults
+      .filter(({ baseline }) => baseline.direction !== "FLAT" && baseline.netEdge > 0)
+      .map(({ result }) => result.asset);
 
     // --- 7. Enqueue AI orchestration for top triggered assets (M3) ---
     const maxAiAssets = config?.maxAssetsForAI ?? 5;
@@ -210,6 +257,8 @@ export async function runMarketScanner(
         totalAssets: symbols.length,
         afterLiquidity: liquidSymbols.length,
         scanned: results.length,
+        quantitativeCandidates: quantitativeResults.length,
+        netEdgeCandidates: quantitativeResults.map(({ result, baseline }) => ({ asset: result.asset, netEdge: baseline.netEdge, direction: baseline.direction })),
         triggered: triggeredAssets.length,
         scores: results.map((r) => `${r.asset}=${r.score}(${r.classification})`),
       },

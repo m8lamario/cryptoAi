@@ -8,6 +8,7 @@ export interface AdvancedMetrics {
   symbol: string;
   fundingRate: number | null; // decimal (e.g. 0.0001 = 0.01%)
   openInterest: number | null; // USDT
+  openInterestChange24h: number | null; // percent
   priceChange1h: number | null; // percent
   priceChange4h: number | null; // percent
   priceChange24h: number | null; // percent
@@ -36,9 +37,14 @@ export function scoreFundingRate(fundingRate: number | null): number {
  *
  * Normalized: OI of 100M = 50, 200M+ = 100.
  */
-export function scoreOpenInterest(openInterest: number | null): number {
+export function scoreOpenInterest(
+  openInterest: number | null,
+  change24h: number | null = null,
+): number {
+  if (change24h !== null) {
+    return Math.min(100, Math.abs(change24h) * 10);
+  }
   if (openInterest === null) return 0;
-  // 200M OI = 100, linear below
   return Math.min(100, (openInterest / 200_000_000) * 100);
 }
 
@@ -77,4 +83,3 @@ export function computePriceChange(
   if (!prevClose || prevClose === 0 || !currentClose) return null;
   return ((currentClose - prevClose) / prevClose) * 100;
 }
-

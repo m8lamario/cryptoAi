@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "@cryptoai/database";
 import { AssetSymbolSchema } from "@cryptoai/market-data";
+import { z } from "zod";
 import type {
   LatestResponse,
   HistoryResponse,
@@ -103,9 +104,14 @@ export function createMarketDataRouter(): Router {
       }
 
       const symbol = symbolResult.data;
-      const interval = (req.query.interval as string) ?? "15m";
+      const intervalResult = CandleIntervalSchema.safeParse(req.query.interval ?? "15m");
+      if (!intervalResult.success) {
+        res.status(400).json({ error: "Invalid candle interval" });
+        return;
+      }
+      const interval = intervalResult.data;
       const limit = Math.min(
-        Number.parseInt(req.query.limit as string, 10) || 100,
+        Math.max(Number.parseInt(req.query.limit as string, 10) || 100, 1),
         500,
       );
 
@@ -126,9 +132,10 @@ export function createMarketDataRouter(): Router {
 
       const candles = await prisma.priceCandle.findMany({
         where: { assetId: asset.id, interval },
-        orderBy: { openTime: "asc" },
+        orderBy: { openTime: "desc" },
         take: limit,
       });
+      candles.reverse();
 
       const response: HistoryResponse = {
         symbol,
@@ -191,3 +198,5 @@ export function createMarketDataRouter(): Router {
 
   return router;
 }
+
+const CandleIntervalSchema = z.enum(["1m", "3m", "5m", "15m", "30m", "1h", "4h", "1d"]);

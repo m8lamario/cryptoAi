@@ -5,9 +5,9 @@ import {
   getModelPerformance,
   getPromptVersionPerformance,
   getSystemStats,
+  getPnlBreakdown,
 } from "@cryptoai/analytics";
-
-export const ANALYTICS_ROUTE = "/analytics";
+import { getConfigurationSnapshots, getDecisionAudit } from "@cryptoai/database";
 
 export function createAnalyticsRouter(): Router {
   const router = Router();
@@ -83,6 +83,45 @@ export function createAnalyticsRouter(): Router {
     }
   });
 
+  /**
+   * GET /analytics/pnl?days=7
+   * Returns P&L breakdown for a specific number of days.
+   */
+  router.get("/pnl", async (req, res) => {
+    try {
+      const days = Math.min(Math.max(Number.parseInt(req.query.days as string, 10) || 7, 1), 365);
+      const until = new Date();
+      const since = new Date(until.getTime() - days * 86400_000);
+      res.json(await getPnlBreakdown(since, until));
+    } catch (err) {
+      logger.error({ err }, "Failed to fetch P&L breakdown");
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  router.get("/decision/:decisionKey", async (req, res) => {
+    try {
+      const audit = await getDecisionAudit(String(req.params.decisionKey));
+      if (!audit) {
+        res.status(404).json({ error: "Decision audit not found" });
+        return;
+      }
+      res.json(audit);
+    } catch (err) {
+      logger.error({ err }, "Failed to fetch decision audit");
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  router.get("/configuration-snapshots", async (req, res) => {
+    try {
+      const kind = typeof req.query.kind === "string" ? req.query.kind : undefined;
+      res.json(await getConfigurationSnapshots(kind as Parameters<typeof getConfigurationSnapshots>[0]));
+    } catch (err) {
+      logger.error({ err }, "Failed to fetch configuration snapshots");
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   return router;
 }
-

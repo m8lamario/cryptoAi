@@ -1,4 +1,5 @@
 import { prisma } from "@cryptoai/database";
+import { getPnlBreakdown as databaseGetPnlBreakdown } from "@cryptoai/database";
 
 /**
  * Phase 5 — Analytics & Evaluation.
@@ -283,3 +284,22 @@ export async function getSystemStats(
   };
 }
 
+// --- P&L Breakdown ---
+
+export interface PnlBreakdownMetrics {
+  realizedPnl: number;
+  unrealizedPnl: number;
+  dailyRealizedPnl: number;
+  dailyUnrealizedPnl: number;
+  cumulativeNetPnl: number;
+  fee: number;
+  slippage: number;
+  outcomeCount: number;
+}
+
+export async function getPnlBreakdown(
+  since: Date = new Date(Date.now() - 7 * 86400_000),
+  until: Date = new Date(),
+): Promise<PnlBreakdownMetrics> {
+  return databaseGetPnlBreakdown(since, until);
+}

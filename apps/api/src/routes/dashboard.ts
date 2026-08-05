@@ -10,6 +10,7 @@ import {
   fetchTimeline,
   getPersistedOperatingMode,
 } from "../dashboard-data.js";
+import { getPnlBreakdown } from "@cryptoai/analytics";
 
 export function createDashboardRouter(): Router {
   const router = Router();
@@ -63,12 +64,13 @@ export function createDashboardRouter(): Router {
       );
 
       const historyFrom = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const [equityHistory, timeline, agentStatuses, aiCostSummary, operatingMode] = await Promise.all([
+      const [equityHistory, timeline, agentStatuses, aiCostSummary, operatingMode, pnlBreakdown] = await Promise.all([
         fetchEquityHistory(historyFrom, new Date(), "1h"),
         fetchTimeline(undefined, 30),
         fetchAgentStatuses(),
         fetchAiCostSummary(),
         getPersistedOperatingMode(),
+        getPnlBreakdown(historyFrom, new Date()),
       ]);
       const paperEquity = Number(paperBalance?.quote ?? 0) + paperExposure;
       const kpis = calculateDashboardKpis({
@@ -203,6 +205,10 @@ export function createDashboardRouter(): Router {
           aiCostUsd: Number(run.aiCostUsd),
           createdAt: run.createdAt.toISOString(),
         })),
+        pnlBreakdown,
+        migrationSafe: true,
+        configurationSnapshotCount: await prisma.configurationSnapshot.count(),
+        latestDecisionAuditAt: (await prisma.decisionAudit.findFirst({ orderBy: { createdAt: "desc" } }))?.createdAt.toISOString() ?? null,
       });
     } catch (err) {
       logger.error({ err }, "Failed to fetch dashboard data");
