@@ -269,6 +269,14 @@ describe("ManagerAgent", () => {
         action: "BUY",
         confidence: 0.75,
         suggestedRiskFraction: 0.02,
+        strategy: "SWING",
+        expectedDuration: "3 days",
+        expectedProfitPercent: 5,
+        expectedRiskPercent: 2,
+        suggestedEntry: 62000,
+        suggestedTakeProfit: 65000,
+        suggestedStopLoss: 60000,
+        urgency: "MEDIUM",
         rationale: ["Technical and Macro both bullish"],
         invalidationConditions: ["BTC drops below $62K"],
         isAmbiguous: false,
@@ -301,6 +309,14 @@ describe("ManagerAgent", () => {
         action: "SELL",
         confidence: 0.8,
         suggestedRiskFraction: 0.03,
+        strategy: "INTRADAY",
+        expectedDuration: "1 day",
+        expectedProfitPercent: 3,
+        expectedRiskPercent: 1.5,
+        suggestedEntry: 62000,
+        suggestedTakeProfit: 60000,
+        suggestedStopLoss: 63000,
+        urgency: "HIGH",
         rationale: ["Macro and technical reports agree on a defensive action"],
         invalidationConditions: ["Price reclaims resistance"],
         isAmbiguous: false,
@@ -324,7 +340,7 @@ describe("ManagerAgent", () => {
     expect(result.report.status).toBe("VALID");
     expect(result.proposal.status).toBe("VALID");
     expect(result.proposal.action).toBe("SELL");
-    expect(result.proposal.suggestedRiskFraction).toBe(0.03);
+    expect(result.proposal.suggestedRiskFraction).toBeNull();
     expect(result.proposal.reportIds).toEqual(["run-test", "run-test"]);
   });
 

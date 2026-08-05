@@ -36,3 +36,6 @@ export {
   reserveScannerAiBudget,
 } from "./m4-store.js";
 export type { RuntimeAsset } from "./m4-store.js";
+export { upsertExternalDataSnapshot, getLatestExternalSnapshots, deleteExpiredExternalDataSnapshots } from "./context-data-store.js";
+export { getAIBudgetPolicy, reserveAICall, settleAICall, releaseAICall } from "./ai-budget-store.js";
+export type { AICallReservationInput, AICallReservation } from "./ai-budget-store.js";

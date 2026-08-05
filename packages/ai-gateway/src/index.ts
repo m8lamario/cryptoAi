@@ -24,4 +24,5 @@ export type {
   AIGatewayConfig,
   GatewayCallOptions,
   GatewayResponse,
+  AICostGovernance,
 } from "./types.js";

@@ -102,6 +102,20 @@ export interface BudgetConfig {
 
 // --- Gateway Config ---
 
+export interface AICostGovernance {
+  reserve(input: {
+    idempotencyKey: string;
+    estimatedCostUsd: number;
+    requestedModel: string;
+    provider: string;
+    jobId?: string;
+    agentId?: string;
+    asset?: string;
+  }): Promise<{ status: "RESERVED" | "ALREADY_RESERVED" | "DENIED"; reservationId?: string; reason?: string }>;
+  settle(input: { reservationId: string; actualCostUsd: number; usage: UsageStats; actualModel: string }): Promise<void>;
+  release(input: { reservationId: string; reason: string }): Promise<void>;
+}
+
 export interface AIGatewayConfig {
   provider: AIProvider;
   circuitBreaker?: CircuitBreakerConfig;
@@ -114,6 +128,8 @@ export interface AIGatewayConfig {
   defaultTemperature?: number;
   /** Default max output tokens */
   defaultMaxTokens?: number;
+  costGovernance?: AICostGovernance;
+  governanceRequired?: boolean;
 }
 
 // --- Gateway Call Options ---
@@ -125,6 +141,10 @@ export interface GatewayCallOptions {
   reasoning?: "low" | "medium" | "high" | "xhigh";
   timeoutMs?: number;
   maxRetries?: number;
+  idempotencyKey?: string;
+  jobId?: string;
+  agentId?: string;
+  asset?: string;
 }
 
 // --- Gateway Response ---
@@ -141,4 +161,3 @@ export interface GatewayResponse<T> {
   runId: string;
   generatedAt: string;
 }
-

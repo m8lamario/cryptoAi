@@ -146,6 +146,31 @@ model DataCollectionRun {
   snapshots MarketSnapshot[]
 }
 
+model ExternalDataSnapshot {
+  id                  String   @id @default(cuid())
+  domain              String
+  asset               String?
+  provider            String
+  providerVersion     String
+  observedAt          DateTime
+  acquiredAt          DateTime
+  validUntil          DateTime?
+  qualityScore        Decimal  @db.Decimal(5, 4)
+  qualityStatus       String
+  sampleSize          Int?
+  methodologyVersion  String?
+  payloadHash         String
+  payload             Json
+  expiresAt           DateTime?
+  createdAt           DateTime @default(now())
+
+  @@unique([domain, provider, payloadHash])
+  @@index([domain, asset, observedAt])
+  @@index([provider, acquiredAt])
+  @@index([qualityStatus])
+  @@index([expiresAt])
+}
+
 // --- Phase 2: Quantitative & Risk Engine ---
 
 model KillSwitch {
@@ -210,6 +235,8 @@ model StoredTradeProposal {
   action                 String? // BUY | SELL | HOLD | WAIT | null
   confidence             Decimal   @db.Decimal(4, 2)
   suggestedRiskFraction  Decimal?  @db.Decimal(4, 2)
+  tradingPlan            Json?
+  contractVersion        String    @default("m6-contracts-v1")
   rationale              Json
   reportIds              String[]
   invalidationConditions Json
@@ -466,6 +493,61 @@ model ScannerAiBudget {
   @@index([budgetDay])
 }
 
+model AIBudgetPolicy {
+  id           String   @id @default(cuid())
+  singletonKey String   @unique @default("GLOBAL")
+  maxDailyUsd  Decimal  @db.Decimal(18, 6)
+  maxMonthlyUsd Decimal @db.Decimal(18, 6)
+  enabled      Boolean  @default(true)
+  version      Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model AIBudgetBucket {
+  id             String   @id @default(cuid())
+  bucketType     String
+  bucketStart    DateTime
+  reservedUsd    Decimal  @default(0) @db.Decimal(18, 6)
+  settledUsd     Decimal  @default(0) @db.Decimal(18, 6)
+  releasedUsd    Decimal  @default(0) @db.Decimal(18, 6)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([bucketType, bucketStart])
+}
+
+model AICall {
+  id                String   @id @default(cuid())
+  idempotencyKey    String   @unique
+  reservationId     String?  @unique
+  jobId             String?
+  agentId           String?
+  asset             String?
+  provider          String
+  requestedModel    String
+  actualModel       String?
+  status            String
+  estimatedCostUsd  Decimal  @db.Decimal(18, 6)
+  actualCostUsd     Decimal? @db.Decimal(18, 6)
+  promptTokens      Int?
+  completionTokens  Int?
+  latencyMs         Int?
+  providerRequestId  String?
+  attempt           Int      @default(1)
+  parentCallId      String?
+  errorCategory     String?
+  errorMessage      String?
+  reservedAt        DateTime?
+  settledAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([jobId, createdAt])
+  @@index([status, createdAt])
+  @@index([provider, requestedModel, createdAt])
+}
+
 model PerformanceSnapshot {
   id                 String   @id @default(cuid())
   realizedPnl        Decimal  @default(0) @db.Decimal(24, 8)
@@ -475,7 +557,6 @@ model PerformanceSnapshot {
   cumulativeNetPnl   Decimal  @default(0) @db.Decimal(24, 8)
   equity             Decimal  @default(0) @db.Decimal(24, 8)
   recordedAt         DateTime @default(now())
-
   @@index([recordedAt])
 }
 
@@ -488,7 +569,6 @@ model ConfigurationSnapshot {
   effectiveFrom DateTime @default(now())
   createdBy     String   @default("SYSTEM")
   createdAt     DateTime @default(now())
-
   @@unique([kind, version])
   @@unique([kind, payloadHash])
   @@index([kind, createdAt])
@@ -516,7 +596,6 @@ model DecisionAudit {
   migrationSafe            Boolean  @default(true)
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
-
   @@index([asset, createdAt])
   @@index([outcomeStatus, createdAt])
 }
@@ -538,8 +617,73 @@ model OutcomeLedger {
   netPnl          Decimal  @default(0) @db.Decimal(24, 8)
   wasCorrect      Boolean?
   recordedAt      DateTime @default(now())
-
   @@unique([decisionAuditId, checkpoint])
   @@index([proposalRunId, recordedAt])
   @@index([checkpoint, recordedAt])
+}
+
+model WorkflowRun {
+  id                       String   @id @default(cuid())
+  workflowKey              String   @unique
+  correlationId            String
+  parentRunId              String?
+  mode                     String
+  trigger                  String
+  asset                    String
+  asOf                     DateTime
+  status                   String
+  executionPolicy          String
+  snapshotBundle           Json
+  snapshotHash             String
+  configurationSnapshotIds String[]
+  bullJobId                String?
+  startedAt                DateTime @default(now())
+  endedAt                  DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  phases                   WorkflowPhase[]
+  artifacts                WorkflowArtifact[]
+
+  @@index([correlationId, createdAt])
+  @@index([status, createdAt])
+}
+
+model WorkflowPhase {
+  id              String   @id @default(cuid())
+  workflowRunId   String
+  workflowRun     WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  name            String
+  sequence        Int
+  status          String
+  attempt         Int      @default(0)
+  maxAttempts     Int      @default(3)
+  inputJson       Json?
+  outputJson      Json?
+  inputHash       String?
+  outputHash      String?
+  errorJson       Json?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([workflowRunId, name])
+  @@index([workflowRunId, sequence])
+  @@index([status, updatedAt])
+}
+
+model WorkflowArtifact {
+  id            String   @id @default(cuid())
+  workflowRunId String
+  workflowRun   WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  phaseName     String
+  artifactType  String
+  entityType    String
+  entityId      String
+  contentHash   String
+  role          String?
+  createdAt     DateTime @default(now())
+
+  @@unique([workflowRunId, phaseName, artifactType, entityId])
+  @@index([entityType, entityId])
 }

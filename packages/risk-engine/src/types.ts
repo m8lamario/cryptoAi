@@ -13,6 +13,21 @@ export const TradeProposalStatusSchema = z.enum([
   "AMBIGUOUS",
 ]);
 
+export const TradingPlanSchema = z.object({
+  strategy: z.enum(["SCALPING", "INTRADAY", "SWING", "POSITION"]),
+  expectedDuration: z.string().min(1),
+  expectedProfitPercent: z.number(),
+  expectedRiskPercent: z.number().nonnegative(),
+  confidence: z.number().min(0).max(1),
+  suggestedEntry: z.number().positive(),
+  suggestedTakeProfit: z.number().positive(),
+  suggestedStopLoss: z.number().positive(),
+  urgency: z.enum(["LOW", "MEDIUM", "HIGH"]),
+  reasons: z.array(z.string()).min(1),
+});
+
+export type TradingPlan = z.infer<typeof TradingPlanSchema>;
+
 export const TradeProposalSchema = z.object({
   status: TradeProposalStatusSchema,
   asset: z.string(),
@@ -20,9 +35,12 @@ export const TradeProposalSchema = z.object({
   confidence: z.number().min(0).max(1),
   rationale: z.array(z.string()),
   reportIds: z.array(z.string()),
+  /** Deprecated compatibility field; deterministic risk sizing must not trust it. */
   suggestedRiskFraction: z.number().min(0).max(1).nullable(),
   invalidationConditions: z.array(z.string()),
   expiresAt: z.string().datetime().nullable(),
+  tradingPlan: TradingPlanSchema.nullable().default(null),
+  createdAt: z.string().datetime().default(() => new Date().toISOString()),
 });
 
 export type TradeProposal = z.infer<typeof TradeProposalSchema>;

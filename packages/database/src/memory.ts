@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma-client.js";
 
 /**
@@ -51,6 +52,8 @@ export interface TradeProposalInput {
   completionTokens: number;
   latencyMs: number;
   estimatedCostUsd: number;
+  tradingPlan?: Record<string, unknown> | null;
+  contractVersion?: string;
 }
 
 /**
@@ -127,6 +130,10 @@ export async function storeTradeProposal(proposal: TradeProposalInput): Promise<
       completionTokens: proposal.completionTokens,
       latencyMs: proposal.latencyMs,
       estimatedCostUsd: proposal.estimatedCostUsd,
+      tradingPlan: proposal.tradingPlan
+        ? proposal.tradingPlan as Prisma.InputJsonValue
+        : undefined,
+      contractVersion: proposal.contractVersion,
     },
     update: {
       action: proposal.action,

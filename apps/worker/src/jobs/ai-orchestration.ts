@@ -47,6 +47,7 @@ import {
   createConfiguredNotificationSender,
   isBudgetExhaustedReason,
 } from "../notifications.js";
+import { createDatabaseAICostGovernance } from "../ai-cost-governance.js";
 
 // --- Job Types ---
 
@@ -121,12 +122,14 @@ function buildConfig(): RunConfig {
     defaultMaxRetries: Number.parseInt(readEnv("AI_DEFAULT_MAX_RETRIES", "2"), 10),
     defaultTemperature: parseFloatEnv("AI_DEFAULT_TEMPERATURE", 0.3),
     defaultMaxTokens: Number.parseInt(readEnv("AI_DEFAULT_MAX_TOKENS", "1500"), 10),
+    costGovernance: createDatabaseAICostGovernance(),
+    governanceRequired: true,
   });
 
   return {
     gateway,
     decisionGateConfig: {
-      minValidReports: 2,
+      minValidReports: 3,
       minConfidence: 0.5,
       maxProposalAgeMs: 3600_000,
       maxReportAgeMs: 7200_000,
@@ -533,6 +536,8 @@ export async function runAIOrchestration(
             action: proposal.action,
             confidence: proposal.confidence,
             suggestedRiskFraction: proposal.suggestedRiskFraction,
+            tradingPlan: proposal.tradingPlan,
+            contractVersion: "m6-contracts-v1",
             rationale: proposal.rationale,
             reportIds: proposal.reportIds,
             invalidationConditions: proposal.invalidationConditions,
@@ -552,6 +557,7 @@ export async function runAIOrchestration(
           proposalPersisted = true;
         } catch (err) {
           logger.error({ err, asset: assetData.symbol }, "Failed to persist trade proposal; skipping execution");
+          continue;
         }
         if (!proposalPersisted) continue;
 

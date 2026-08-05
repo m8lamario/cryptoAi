@@ -202,8 +202,8 @@ export function evaluateTradeProposal(
     });
   }
 
-  // 9. Position sizing
-  const riskFraction = proposal.suggestedRiskFraction ?? 0.01;
+  // 9. Position sizing is deterministic; Manager-provided risk fractions are non-authoritative.
+  const riskFraction = 0.01;
   const sizing = computePositionSize({
     portfolioValue: options.portfolio.totalValue,
     entryPrice,

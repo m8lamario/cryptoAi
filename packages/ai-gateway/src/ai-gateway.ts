@@ -65,6 +65,18 @@ export class AIGateway {
     const runId = randomUUID();
     const generatedAt = new Date().toISOString();
     const requestedModel = options.model ?? this.config.provider.defaultModel;
+    const idempotencyKey = options.idempotencyKey ?? `${runId}:${requestedModel}:${promptVersion}:${schemaVersion}`;
+    const governance = this.config.costGovernance;
+    if (this.config.governanceRequired && !governance) {
+      return { status: "UNAVAILABLE", data: null, usage: null, error: { category: "BUDGET_EXCEEDED", message: "AI cost governance is required but unavailable", retryable: false }, requestedModel, actualModel: null, promptVersion, schemaVersion, runId, generatedAt };
+    }
+    const estimatedCostUsd = 0.01;
+    let reservationId: string | undefined;
+    if (governance) {
+      const reservation = await governance.reserve({ idempotencyKey, estimatedCostUsd, requestedModel, provider: this.config.provider.name, jobId: options.jobId, agentId: options.agentId, asset: options.asset });
+      if (reservation.status === "DENIED" || !reservation.reservationId) return { status: "UNAVAILABLE", data: null, usage: null, error: { category: "BUDGET_EXCEEDED", message: reservation.reason ?? "AI budget denied", retryable: false }, requestedModel, actualModel: null, promptVersion, schemaVersion, runId, generatedAt };
+      reservationId = reservation.reservationId;
+    }
 
     // 1. Circuit breaker check
     if (this.circuitBreaker && !this.circuitBreaker.allowCall()) {
@@ -159,6 +171,7 @@ export class AIGateway {
         if (this.budgetTracker) {
           this.budgetTracker.record(result.usage.estimatedCostUsd);
         }
+        if (governance && reservationId) await governance.settle({ reservationId, actualCostUsd: result.usage.estimatedCostUsd, usage: result.usage, actualModel: result.actualModel });
 
         // Parse and validate JSON output
         try {
@@ -233,6 +246,8 @@ export class AIGateway {
     if (this.circuitBreaker) {
       this.circuitBreaker.failure();
     }
+
+    if (governance && reservationId) await governance.release({ reservationId, reason: lastError?.message ?? "AI call failed" });
 
     return {
       status: "UNAVAILABLE",

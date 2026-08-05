@@ -77,6 +77,10 @@ export function evaluateDecisionGate(
     };
   }
 
+  if (proposal.status === "VALID" && (proposal.action === "BUY" || proposal.action === "SELL") && proposal.tradingPlan === null) {
+    return { decision: "BLOCK", reason: "Actionable proposal is missing a complete TradingPlan", ruleCode: "INVALID_PROPOSAL" };
+  }
+
   // 2. Check proposal expiry
   if (proposal.expiresAt) {
     const expiresAt = new Date(proposal.expiresAt);
@@ -86,6 +90,13 @@ export function evaluateDecisionGate(
         reason: `Proposal expired at ${proposal.expiresAt}`,
         ruleCode: "DATA_TOO_STALE",
       };
+    }
+  }
+
+  if (proposal.createdAt) {
+    const createdAt = new Date(proposal.createdAt);
+    if (now.getTime() - createdAt.getTime() > config.maxProposalAgeMs) {
+      return { decision: "BLOCK", reason: "TradeProposal is older than the configured maximum age", ruleCode: "DATA_TOO_STALE" };
     }
   }
 

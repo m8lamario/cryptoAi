@@ -187,11 +187,13 @@ export interface SystemStatsResponse {
 
 // --- v1.4: Trading Plan ---
 export {
+  TradingPlanSchema,
   StrategySchema,
   UrgencySchema,
-  TradingPlanSchema,
 } from "./trading-plan.js";
-export type { Strategy, Urgency, TradingPlan, TradingPlanResponse } from "./trading-plan.js";
+export type { TradingPlan } from "./trading-plan.js";
+
+export const CONTRACT_VERSION = "m6-contracts-v1";
 
 // --- v1.4: Market Opportunity Score ---
 export {

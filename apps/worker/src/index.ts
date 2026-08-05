@@ -32,6 +32,7 @@ import {
   createAssetUniverseRefreshWorker,
 } from "./queues/asset-universe-refresh.js";
 import { getScannerConfig } from "@cryptoai/database";
+import { createContextDataQueue, createContextDataWorker } from "./queues/context-data.js";
 const config = getServerConfig();
 const healthQueue = createSystemHealthQueue(config.REDIS_URL);
 const healthWorker = createSystemHealthWorker(config.REDIS_URL);
@@ -49,6 +50,8 @@ const universeQueue = createAssetUniverseRefreshQueue(config.REDIS_URL);
 const universeWorker = createAssetUniverseRefreshWorker(config.REDIS_URL);
 const scannerConfig = await getScannerConfig();
 const universeRefreshMinutes = Math.max(1, scannerConfig.universeRefreshMinutes);
+const contextDataQueue = createContextDataQueue(config.REDIS_URL);
+const contextDataWorker = createContextDataWorker(config.REDIS_URL);
 // Schedule market data collection every 15 minutes
 await marketDataQueue.add(
   "scheduled-collection",
@@ -101,6 +104,7 @@ await universeQueue.add(
     jobId: "asset-universe-refresh-scheduled",
   },
 );
+await contextDataQueue.add("scheduled-context-data", {}, { repeat: { pattern: "*/15 * * * *" }, jobId: "context-data-scheduled" });
 logger.info(
   { universeRefreshMinutes },
   "Worker started — market data every 15m, market scanner every 60s, memory tracker and equity snapshots every 15m (AI triggered on demand)",
@@ -121,6 +125,8 @@ async function shutdown(signal: string): Promise<void> {
   await equitySnapshotQueue.close();
   await universeWorker.close();
   await universeQueue.close();
+  await contextDataWorker.close();
+  await contextDataQueue.close();
   logger.info("Worker shut down gracefully");
   process.exit(0);
 }

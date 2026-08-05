@@ -13,3 +13,15 @@ export {
   runHybridBacktest,
 } from "./backtest.js";
 export type { BacktestConfig, BacktestMetrics } from "./backtest.js";
+
+export { runWalkForward } from "./walk-forward.js";
+export type {
+  WalkForwardConfig,
+  WalkForwardResult,
+  WalkForwardFold,
+  EvaluationMetrics,
+  EvaluationCandle,
+  EvaluationStrategy,
+  FoldRole,
+  MarketRegime,
+} from "./walk-forward.js";

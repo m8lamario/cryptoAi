@@ -34,6 +34,7 @@ export {
   RiskDecisionSchema,
   RiskProfileSchema,
   RULE_CODES,
+  TradingPlanSchema,
 } from "./types.js";
 
 export type {
@@ -47,4 +48,5 @@ export type {
   AssetPrice,
   PositionSizingInput,
   PositionSizingResult,
+  TradingPlan,
 } from "./types.js";

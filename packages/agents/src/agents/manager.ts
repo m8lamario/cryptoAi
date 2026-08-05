@@ -28,12 +28,17 @@ export interface ManagerRunResult {
 const ManagerOutputSchema = z.object({
   action: z.enum(["BUY", "SELL", "HOLD", "WAIT"]).nullable(),
   confidence: z.number().min(0).max(1),
-  suggestedRiskFraction: z.number().min(0).max(1).nullable(),
+  strategy: z.enum(["SCALPING", "INTRADAY", "SWING", "POSITION"]).nullable(),
+  expectedDuration: z.string().nullable(),
+  expectedProfitPercent: z.number().nullable(),
+  expectedRiskPercent: z.number().nonnegative().nullable(),
+  suggestedEntry: z.number().positive().nullable(),
+  suggestedTakeProfit: z.number().positive().nullable(),
+  suggestedStopLoss: z.number().positive().nullable(),
+  urgency: z.enum(["LOW", "MEDIUM", "HIGH"]).nullable(),
   rationale: z.array(z.string()).min(1).max(10),
   invalidationConditions: z.array(z.string()).max(6),
-  /** Whether there's significant disagreement among analysts */
   isAmbiguous: z.boolean(),
-  /** If ambiguous, explain why */
   ambiguityReason: z.string().nullable(),
 });
 
@@ -276,9 +281,11 @@ export class ManagerAgent extends BaseAgent {
         confidence: output.confidence,
         rationale: isAmbiguous && output.ambiguityReason ? [output.ambiguityReason, ...output.rationale] : output.rationale,
         reportIds,
-        suggestedRiskFraction: !isAmbiguous && (output.action === "BUY" || output.action === "SELL") ? output.suggestedRiskFraction : null,
+        suggestedRiskFraction: null,
         invalidationConditions: output.invalidationConditions,
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+        tradingPlan: buildTradingPlan(output, symbol, output.action),
+        createdAt: response.generatedAt,
       };
 
       return { report, proposal };
@@ -362,5 +369,32 @@ function unavailableProposal(asset: string, reason: string): TradeProposal {
     suggestedRiskFraction: null,
     invalidationConditions: [],
     expiresAt: null,
+    tradingPlan: null,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function buildTradingPlan(
+  output: z.infer<typeof ManagerOutputSchema>,
+  symbol: string,
+  action: "BUY" | "SELL" | "HOLD" | "WAIT" | null,
+): import("@cryptoai/risk-engine").TradingPlan | null {
+  if (action !== "BUY" && action !== "SELL") return null;
+  if (
+    output.strategy === null || output.expectedDuration === null || output.expectedProfitPercent === null ||
+    output.expectedRiskPercent === null || output.suggestedEntry === null || output.suggestedTakeProfit === null ||
+    output.suggestedStopLoss === null || output.urgency === null
+  ) return null;
+  return {
+    strategy: output.strategy,
+    expectedDuration: output.expectedDuration,
+    expectedProfitPercent: output.expectedProfitPercent,
+    expectedRiskPercent: output.expectedRiskPercent,
+    confidence: output.confidence,
+    suggestedEntry: output.suggestedEntry,
+    suggestedTakeProfit: output.suggestedTakeProfit,
+    suggestedStopLoss: output.suggestedStopLoss,
+    urgency: output.urgency,
+    reasons: [`${symbol} ${action} plan`, ...output.rationale].slice(0, 8),
   };
 }

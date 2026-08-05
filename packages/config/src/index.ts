@@ -132,3 +132,35 @@ export type {
   RoleModelConfig,
   MultiModelConfig,
 } from "./multi-model.js";
+
+const aiConfigSchema = z.object({
+  AI_DAILY_BUDGET_USD: z.coerce.number().min(0).default(1),
+  AI_MONTHLY_BUDGET_USD: z.coerce.number().min(0).default(20),
+  AI_DEFAULT_TIMEOUT_MS: z.coerce.number().int().min(1000).max(300000).default(60000),
+  AI_DEFAULT_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
+  AI_DEFAULT_MAX_TOKENS: z.coerce.number().int().min(1).max(100000).default(1500),
+});
+
+export interface AICoreConfig {
+  dailyBudgetUsd: number;
+  monthlyBudgetUsd: number;
+  defaultTimeoutMs: number;
+  defaultMaxRetries: number;
+  defaultMaxTokens: number;
+}
+
+/** Returns core AI configuration from environment variables. All fields have defaults. */
+export function getAICoreConfig(): AICoreConfig {
+  const result = aiConfigSchema.safeParse(process.env);
+  if (!result.success) {
+    throw new Error("Invalid AI configuration");
+  }
+  const d = result.data;
+  return {
+    dailyBudgetUsd: d.AI_DAILY_BUDGET_USD,
+    monthlyBudgetUsd: d.AI_MONTHLY_BUDGET_USD,
+    defaultTimeoutMs: d.AI_DEFAULT_TIMEOUT_MS,
+    defaultMaxRetries: d.AI_DEFAULT_MAX_RETRIES,
+    defaultMaxTokens: d.AI_DEFAULT_MAX_TOKENS,
+  };
+}
