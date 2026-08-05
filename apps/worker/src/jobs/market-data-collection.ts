@@ -1,7 +1,7 @@
 import type { MarketDataProvider } from "@cryptoai/market-data";
-import { BinanceProvider, assetRegistry } from "@cryptoai/market-data";
+import { BinanceProvider } from "@cryptoai/market-data";
 import type { Job } from "bullmq";
-import { prisma } from "@cryptoai/database";
+import { prisma, getRuntimeAssets } from "@cryptoai/database";
 import { logger } from "../logger.js";
 
 export interface MarketDataCollectionJobData {
@@ -25,7 +25,7 @@ export async function collectMarketData(
 ): Promise<MarketDataCollectionJobResult> {
   void job;
   const provider: MarketDataProvider = new BinanceProvider();
-  const assets = assetRegistry.getActiveAssets();
+  const assets = await getRuntimeAssets();
   const symbols = assets.map((a) => a.symbol);
 
   // Create collection run record

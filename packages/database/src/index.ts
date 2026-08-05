@@ -25,3 +25,14 @@ export {
   getPnlBreakdown,
 } from "./m0-audit-store.js";
 export type { M0ConfigurationKind, ConfigurationSnapshotInput, DecisionAuditInput } from "./m0-audit-store.js";
+export {
+  refreshAssetUniverse,
+  getRuntimeAssets,
+  shouldReevaluateAsset,
+  saveAssetEvaluationState,
+  isAssetInCooldown,
+  setAssetCooldown,
+  syncPositionCooldown,
+  reserveScannerAiBudget,
+} from "./m4-store.js";
+export type { RuntimeAsset } from "./m4-store.js";

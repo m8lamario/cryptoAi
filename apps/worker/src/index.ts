@@ -27,6 +27,11 @@ import {
   createEquitySnapshotQueue,
   createEquitySnapshotWorker,
 } from "./queues/equity-snapshot.js";
+import {
+  createAssetUniverseRefreshQueue,
+  createAssetUniverseRefreshWorker,
+} from "./queues/asset-universe-refresh.js";
+import { getScannerConfig } from "@cryptoai/database";
 const config = getServerConfig();
 const healthQueue = createSystemHealthQueue(config.REDIS_URL);
 const healthWorker = createSystemHealthWorker(config.REDIS_URL);
@@ -40,6 +45,10 @@ const memoryTrackerQueue = createMemoryTrackerQueue(config.REDIS_URL);
 const memoryTrackerWorker = createMemoryTrackerWorker(config.REDIS_URL);
 const equitySnapshotQueue = createEquitySnapshotQueue(config.REDIS_URL);
 const equitySnapshotWorker = createEquitySnapshotWorker(config.REDIS_URL);
+const universeQueue = createAssetUniverseRefreshQueue(config.REDIS_URL);
+const universeWorker = createAssetUniverseRefreshWorker(config.REDIS_URL);
+const scannerConfig = await getScannerConfig();
+const universeRefreshMinutes = Math.max(1, scannerConfig.universeRefreshMinutes);
 // Schedule market data collection every 15 minutes
 await marketDataQueue.add(
   "scheduled-collection",
@@ -84,7 +93,16 @@ await equitySnapshotQueue.add(
     jobId: "equity-snapshot-scheduled",
   },
 );
+await universeQueue.add(
+  "scheduled-universe-refresh",
+  {},
+  {
+    repeat: { every: universeRefreshMinutes * 60_000 },
+    jobId: "asset-universe-refresh-scheduled",
+  },
+);
 logger.info(
+  { universeRefreshMinutes },
   "Worker started — market data every 15m, market scanner every 60s, memory tracker and equity snapshots every 15m (AI triggered on demand)",
 );
 async function shutdown(signal: string): Promise<void> {
@@ -101,6 +119,8 @@ async function shutdown(signal: string): Promise<void> {
   await memoryTrackerQueue.close();
   await equitySnapshotWorker.close();
   await equitySnapshotQueue.close();
+  await universeWorker.close();
+  await universeQueue.close();
   logger.info("Worker shut down gracefully");
   process.exit(0);
 }

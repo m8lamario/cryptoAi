@@ -112,3 +112,9 @@ async function fetchExchangeInfo(baseUrl: string): Promise<BinanceExchangeInfoSy
   return raw.symbols ?? [];
 }
 
+export async function fetchTopAssetUniverse(
+  topN: number = 100,
+  baseUrl: string = BINANCE_BASE_URL,
+): Promise<AssetInfo[]> {
+  return fetchTopAssets(topN, baseUrl);
+}

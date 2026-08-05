@@ -12,6 +12,12 @@ export interface ScannerConfigData {
   scannerFrequencyMinutes: number;
   minVolume24hUsd: number;
   minMarketCapUsd: number;
+  universeRefreshMinutes: number;
+  cooldownAfterOpenMinutes: number;
+  cooldownAfterCloseMinutes: number;
+  reevaluationDeltaPercent: number;
+  maxDailyAiCalls: number;
+  maxDailyAiCostUsd: number;
 }
 
 export const DEFAULT_SCANNER_CONFIG: ScannerConfigData = {
@@ -22,7 +28,45 @@ export const DEFAULT_SCANNER_CONFIG: ScannerConfigData = {
   scannerFrequencyMinutes: 1,
   minVolume24hUsd: 1_000_000,
   minMarketCapUsd: 10_000_000,
+  universeRefreshMinutes: 60,
+  cooldownAfterOpenMinutes: 60,
+  cooldownAfterCloseMinutes: 60,
+  reevaluationDeltaPercent: 3,
+  maxDailyAiCalls: 20,
+  maxDailyAiCostUsd: 1,
 };
+
+function toConfig(config: {
+  maxAssetsToScan: number;
+  maxAssetsForQuant: number;
+  maxAssetsForAI: number;
+  minScoreForAI: number;
+  scannerFrequencyMinutes: number;
+  minVolume24hUsd: { toNumber(): number };
+  minMarketCapUsd: { toNumber(): number };
+  universeRefreshMinutes: number;
+  cooldownAfterOpenMinutes: number;
+  cooldownAfterCloseMinutes: number;
+  reevaluationDeltaPercent: { toNumber(): number };
+  maxDailyAiCalls: number;
+  maxDailyAiCostUsd: { toNumber(): number };
+}): ScannerConfigData {
+  return {
+    maxAssetsToScan: config.maxAssetsToScan,
+    maxAssetsForQuant: config.maxAssetsForQuant,
+    maxAssetsForAI: config.maxAssetsForAI,
+    minScoreForAI: config.minScoreForAI,
+    scannerFrequencyMinutes: config.scannerFrequencyMinutes,
+    minVolume24hUsd: config.minVolume24hUsd.toNumber(),
+    minMarketCapUsd: config.minMarketCapUsd.toNumber(),
+    universeRefreshMinutes: config.universeRefreshMinutes,
+    cooldownAfterOpenMinutes: config.cooldownAfterOpenMinutes,
+    cooldownAfterCloseMinutes: config.cooldownAfterCloseMinutes,
+    reevaluationDeltaPercent: config.reevaluationDeltaPercent.toNumber(),
+    maxDailyAiCalls: config.maxDailyAiCalls,
+    maxDailyAiCostUsd: config.maxDailyAiCostUsd.toNumber(),
+  };
+}
 
 /** Retrieve the scanner configuration, seeding defaults if not present. */
 export async function getScannerConfig(): Promise<ScannerConfigData> {
@@ -38,19 +82,17 @@ export async function getScannerConfig(): Promise<ScannerConfigData> {
         scannerFrequencyMinutes: DEFAULT_SCANNER_CONFIG.scannerFrequencyMinutes,
         minVolume24hUsd: DEFAULT_SCANNER_CONFIG.minVolume24hUsd,
         minMarketCapUsd: DEFAULT_SCANNER_CONFIG.minMarketCapUsd,
+        universeRefreshMinutes: DEFAULT_SCANNER_CONFIG.universeRefreshMinutes,
+        cooldownAfterOpenMinutes: DEFAULT_SCANNER_CONFIG.cooldownAfterOpenMinutes,
+        cooldownAfterCloseMinutes: DEFAULT_SCANNER_CONFIG.cooldownAfterCloseMinutes,
+        reevaluationDeltaPercent: DEFAULT_SCANNER_CONFIG.reevaluationDeltaPercent,
+        maxDailyAiCalls: DEFAULT_SCANNER_CONFIG.maxDailyAiCalls,
+        maxDailyAiCostUsd: DEFAULT_SCANNER_CONFIG.maxDailyAiCostUsd,
       },
     });
   }
 
-  return {
-    maxAssetsToScan: config.maxAssetsToScan,
-    maxAssetsForQuant: config.maxAssetsForQuant,
-    maxAssetsForAI: config.maxAssetsForAI,
-    minScoreForAI: config.minScoreForAI,
-    scannerFrequencyMinutes: config.scannerFrequencyMinutes,
-    minVolume24hUsd: config.minVolume24hUsd.toNumber(),
-    minMarketCapUsd: config.minMarketCapUsd.toNumber(),
-  };
+  return toConfig(config);
 }
 
 /** Update the scanner configuration (upserts the latest row). */
@@ -64,13 +106,19 @@ export async function updateScannerConfig(
   const config = await prisma.scannerConfig.upsert({
     where: { id: existing?.id ?? "none" },
     update: {
-      maxAssetsToScan: patch.maxAssetsToScan,
-      maxAssetsForQuant: patch.maxAssetsForQuant,
-      maxAssetsForAI: patch.maxAssetsForAI,
-      minScoreForAI: patch.minScoreForAI,
-      scannerFrequencyMinutes: patch.scannerFrequencyMinutes,
-      minVolume24hUsd: patch.minVolume24hUsd,
-      minMarketCapUsd: patch.minMarketCapUsd,
+      ...(patch.maxAssetsToScan === undefined ? {} : { maxAssetsToScan: patch.maxAssetsToScan }),
+      ...(patch.maxAssetsForQuant === undefined ? {} : { maxAssetsForQuant: patch.maxAssetsForQuant }),
+      ...(patch.maxAssetsForAI === undefined ? {} : { maxAssetsForAI: patch.maxAssetsForAI }),
+      ...(patch.minScoreForAI === undefined ? {} : { minScoreForAI: patch.minScoreForAI }),
+      ...(patch.scannerFrequencyMinutes === undefined ? {} : { scannerFrequencyMinutes: patch.scannerFrequencyMinutes }),
+      ...(patch.minVolume24hUsd === undefined ? {} : { minVolume24hUsd: patch.minVolume24hUsd }),
+      ...(patch.minMarketCapUsd === undefined ? {} : { minMarketCapUsd: patch.minMarketCapUsd }),
+      ...(patch.universeRefreshMinutes === undefined ? {} : { universeRefreshMinutes: patch.universeRefreshMinutes }),
+      ...(patch.cooldownAfterOpenMinutes === undefined ? {} : { cooldownAfterOpenMinutes: patch.cooldownAfterOpenMinutes }),
+      ...(patch.cooldownAfterCloseMinutes === undefined ? {} : { cooldownAfterCloseMinutes: patch.cooldownAfterCloseMinutes }),
+      ...(patch.reevaluationDeltaPercent === undefined ? {} : { reevaluationDeltaPercent: patch.reevaluationDeltaPercent }),
+      ...(patch.maxDailyAiCalls === undefined ? {} : { maxDailyAiCalls: patch.maxDailyAiCalls }),
+      ...(patch.maxDailyAiCostUsd === undefined ? {} : { maxDailyAiCostUsd: patch.maxDailyAiCostUsd }),
     },
     create: {
       maxAssetsToScan: patch.maxAssetsToScan ?? DEFAULT_SCANNER_CONFIG.maxAssetsToScan,
@@ -81,18 +129,16 @@ export async function updateScannerConfig(
         patch.scannerFrequencyMinutes ?? DEFAULT_SCANNER_CONFIG.scannerFrequencyMinutes,
       minVolume24hUsd: patch.minVolume24hUsd ?? DEFAULT_SCANNER_CONFIG.minVolume24hUsd,
       minMarketCapUsd: patch.minMarketCapUsd ?? DEFAULT_SCANNER_CONFIG.minMarketCapUsd,
+      universeRefreshMinutes: patch.universeRefreshMinutes ?? DEFAULT_SCANNER_CONFIG.universeRefreshMinutes,
+      cooldownAfterOpenMinutes: patch.cooldownAfterOpenMinutes ?? DEFAULT_SCANNER_CONFIG.cooldownAfterOpenMinutes,
+      cooldownAfterCloseMinutes: patch.cooldownAfterCloseMinutes ?? DEFAULT_SCANNER_CONFIG.cooldownAfterCloseMinutes,
+      reevaluationDeltaPercent: patch.reevaluationDeltaPercent ?? DEFAULT_SCANNER_CONFIG.reevaluationDeltaPercent,
+      maxDailyAiCalls: patch.maxDailyAiCalls ?? DEFAULT_SCANNER_CONFIG.maxDailyAiCalls,
+      maxDailyAiCostUsd: patch.maxDailyAiCostUsd ?? DEFAULT_SCANNER_CONFIG.maxDailyAiCostUsd,
     },
   });
 
-  return {
-    maxAssetsToScan: config.maxAssetsToScan,
-    maxAssetsForQuant: config.maxAssetsForQuant,
-    maxAssetsForAI: config.maxAssetsForAI,
-    minScoreForAI: config.minScoreForAI,
-    scannerFrequencyMinutes: config.scannerFrequencyMinutes,
-    minVolume24hUsd: config.minVolume24hUsd.toNumber(),
-    minMarketCapUsd: config.minMarketCapUsd.toNumber(),
-  };
+  return toConfig(config);
 }
 
 // ---------------------------------------------------------------------------

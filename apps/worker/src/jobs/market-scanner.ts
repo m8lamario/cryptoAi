@@ -1,6 +1,14 @@
 import type { Job } from "bullmq";
-import { prisma } from "@cryptoai/database";
-import { assetRegistry, fetchFuturesMetrics } from "@cryptoai/market-data";
+import {
+  prisma,
+  getRuntimeAssets,
+  shouldReevaluateAsset,
+  saveAssetEvaluationState,
+  isAssetInCooldown,
+  syncPositionCooldown,
+  reserveScannerAiBudget,
+} from "@cryptoai/database";
+import { fetchFuturesMetrics } from "@cryptoai/market-data";
 import {
   scanAllAssets,
   scoreDirectionalBaseline,
@@ -65,9 +73,9 @@ export async function runMarketScanner(
     job.data.aiTriggerThreshold ?? config?.minScoreForAI ?? DEFAULT_SCANNER_WEIGHTS.aiTriggerThreshold;
 
   try {
-    const assets = assetRegistry
-      .getActiveAssets()
-      .slice(0, config?.maxAssetsToScan ?? 100);
+    const assets = (await getRuntimeAssets(config?.maxAssetsToScan ?? 100)).map((asset) => ({
+      symbol: asset.symbol,
+    }));
     const symbols = assets.map((a) => a.symbol);
     const now = Date.now();
 
@@ -169,10 +177,29 @@ export async function runMarketScanner(
       })
       .sort((left, right) => right.baseline.netEdge - left.baseline.netEdge || right.result.score - left.result.score)
       .slice(0, quantitativeLimit);
+    const evaluationDecisions = await Promise.all(quantitativeResults.map(async ({ result, baseline }) => {
+      const featureHash = JSON.stringify({ direction: baseline.direction, features: baseline.features, netEdge: baseline.netEdge });
+      const reevaluate = await shouldReevaluateAsset(result.asset, featureHash, result.score, baseline.netEdge, config?.reevaluationDeltaPercent ?? 3);
+      const cooldown = await isAssetInCooldown(result.asset);
+      return { result, baseline, reevaluate, cooldown, featureHash };
+    }));
     const results = rankedResults;
 
     // --- 6. Persist scores ---
-    for (const { result, baseline } of quantitativeResults) {
+    for (const { result, baseline, reevaluate, cooldown, featureHash } of evaluationDecisions) {
+      try {
+        await saveAssetEvaluationState({
+          symbol: result.asset,
+          featureHash,
+          score: result.score,
+          netEdge: baseline.netEdge,
+          direction: baseline.direction,
+          evaluatedAt: result.evaluatedAt,
+        });
+      } catch (err) {
+        logger.warn({ asset: result.asset, err }, "Failed to persist M4 evaluation state");
+      }
+      if (!reevaluate || cooldown) continue;
       try {
         await storeOpportunityScore({
           ...result,
@@ -193,9 +220,10 @@ export async function runMarketScanner(
       }
     }
 
-    // --- 7. Trigger candidates ---
-    const triggeredAssets = quantitativeResults
-      .filter(({ baseline }) => baseline.direction !== "FLAT" && baseline.netEdge > 0)
+    const triggeredAssets = evaluationDecisions
+      .filter(({ result, baseline, reevaluate, cooldown }) =>
+        reevaluate && !cooldown && baseline.direction !== "FLAT" && baseline.netEdge > 0 && result.score >= threshold,
+      )
       .map(({ result }) => result.asset);
 
     // --- 7. Enqueue AI orchestration for top triggered assets (M3) ---
@@ -209,7 +237,24 @@ export async function runMarketScanner(
       const aiQueue = createAIOrchestrationQueue(serverConfig.REDIS_URL);
 
       for (const asset of topTriggered) {
-        // Deduplication: job name includes asset — BullMQ deduplicates by jobId
+        const budgetReserved = await reserveScannerAiBudget(
+          config?.maxDailyAiCalls ?? 20,
+          config?.maxDailyAiCostUsd ?? 1,
+          0.01,
+        );
+        if (!budgetReserved) {
+          logger.warn({ asset }, "M4 daily AI budget exhausted");
+          continue;
+        }
+        await syncPositionCooldown(
+          asset,
+          config?.cooldownAfterOpenMinutes ?? 60,
+          config?.cooldownAfterCloseMinutes ?? 60,
+        );
+        if (await isAssetInCooldown(asset)) {
+          logger.info({ asset }, "AI enqueue skipped because asset is in cooldown");
+          continue;
+        }
         const jobId = `ai-orch-${asset}-${Math.floor(Date.now() / 60_000)}`;
         try {
           await aiQueue.add(jobId, { asset }, { jobId, removeOnComplete: { age: 3600 } });

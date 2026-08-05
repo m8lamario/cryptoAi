@@ -75,19 +75,29 @@ model AuthAuditEvent {
 }
 
 model Asset {
-  id            String           @id @default(cuid())
-  symbol        String           @unique
-  baseAsset     String
-  quoteAsset    String
-  name          String
-  active        Boolean          @default(true)
-  isPinned      Boolean          @default(false)
-  isExcluded    Boolean          @default(false)
-  maxCapitalUsd Decimal?         @db.Decimal(24, 2)
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  candles       PriceCandle[]
-  snapshots     MarketSnapshot[]
+  id                 String           @id @default(cuid())
+  symbol             String           @unique
+  baseAsset          String
+  quoteAsset         String
+  name               String
+  active             Boolean          @default(true)
+  isPinned           Boolean          @default(false)
+  isExcluded         Boolean          @default(false)
+  whitelist          Boolean          @default(false)
+  exclusionReason    String?
+  dataAvailable      Boolean          @default(true)
+  lastSeenAt         DateTime?
+  lastVolume24hUsd   Decimal?         @db.Decimal(30, 8)
+  lastMarketCapUsd   Decimal?         @db.Decimal(30, 8)
+  lastUniverseVersion String?
+  maxCapitalUsd      Decimal?         @db.Decimal(24, 2)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  candles            PriceCandle[]
+  snapshots          MarketSnapshot[]
+
+  @@index([active, isExcluded, isPinned])
+  @@index([lastSeenAt])
 }
 
 model PriceCandle {
@@ -394,7 +404,79 @@ model ScannerConfig {
   scannerFrequencyMinutes Int      @default(1) // scheduler runs every 60 seconds; retained for UI compatibility
   minVolume24hUsd         Decimal  @default(1000000) @db.Decimal(20, 2)
   minMarketCapUsd         Decimal  @default(10000000) @db.Decimal(20, 2)
+  universeRefreshMinutes  Int      @default(60)
+  cooldownAfterOpenMinutes Int     @default(60)
+  cooldownAfterCloseMinutes Int   @default(60)
+  reevaluationDeltaPercent Decimal @default(3) @db.Decimal(8, 4)
+  maxDailyAiCalls         Int      @default(20)
+  maxDailyAiCostUsd       Decimal  @default(1) @db.Decimal(12, 6)
   updatedAt               DateTime @updatedAt
+}
+
+model AssetUniverseVersion {
+  id          String   @id @default(cuid())
+  version     String   @unique
+  source      String
+  payloadHash String
+  symbols     Json
+  fetchedAt   DateTime
+  effectiveAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([fetchedAt])
+}
+
+model AssetEvaluationState {
+  id             String   @id @default(cuid())
+  symbol         String   @unique
+  featureHash    String
+  evaluatedAt    DateTime
+  score          Float?
+  netEdge        Float?
+  direction      String?
+  lastAiEnqueuedAt DateTime?
+  lastProposalKey String?
+  updatedAt      DateTime @updatedAt
+
+  @@index([evaluatedAt])
+}
+
+model AssetCooldown {
+  id              String   @id @default(cuid())
+  symbol          String   @unique
+  reason          String
+  cooldownUntil   DateTime
+  openedAt        DateTime?
+  closedAt        DateTime?
+  lastDecisionKey String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([cooldownUntil])
+}
+
+model ScannerAiBudget {
+  id             String   @id @default(cuid())
+  budgetDay      DateTime @unique
+  callsReserved  Int      @default(0)
+  costReservedUsd Decimal @default(0) @db.Decimal(12, 6)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([budgetDay])
+}
+
+model PerformanceSnapshot {
+  id                 String   @id @default(cuid())
+  realizedPnl        Decimal  @default(0) @db.Decimal(24, 8)
+  unrealizedPnl      Decimal  @default(0) @db.Decimal(24, 8)
+  dailyRealizedPnl   Decimal  @default(0) @db.Decimal(24, 8)
+  dailyUnrealizedPnl Decimal  @default(0) @db.Decimal(24, 8)
+  cumulativeNetPnl   Decimal  @default(0) @db.Decimal(24, 8)
+  equity             Decimal  @default(0) @db.Decimal(24, 8)
+  recordedAt         DateTime @default(now())
+
+  @@index([recordedAt])
 }
 
 model ConfigurationSnapshot {
@@ -460,17 +542,4 @@ model OutcomeLedger {
   @@unique([decisionAuditId, checkpoint])
   @@index([proposalRunId, recordedAt])
   @@index([checkpoint, recordedAt])
-}
-
-model PerformanceSnapshot {
-  id                 String   @id @default(cuid())
-  realizedPnl        Decimal  @default(0) @db.Decimal(24, 8)
-  unrealizedPnl      Decimal  @default(0) @db.Decimal(24, 8)
-  dailyRealizedPnl   Decimal  @default(0) @db.Decimal(24, 8)
-  dailyUnrealizedPnl Decimal  @default(0) @db.Decimal(24, 8)
-  cumulativeNetPnl   Decimal  @default(0) @db.Decimal(24, 8)
-  equity             Decimal  @default(0) @db.Decimal(24, 8)
-  recordedAt         DateTime @default(now())
-
-  @@index([recordedAt])
 }
